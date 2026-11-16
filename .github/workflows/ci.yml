@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: pip-audit (Python lockfile)
         working-directory: app
         run: uv export --frozen --no-hashes --no-emit-project --format requirements-txt -q > /tmp/req.txt && uvx pip-audit -r /tmp/req.txt
