@@ -2,8 +2,11 @@
 
 cove-db is the user's personal "life databases" system: Postgres in Docker, exposed to agents through
 one MCP server and to the user through a web UI. Each life area is a **domain** (a Postgres schema).
-Live domains: **People** (personal CRM, `crm` schema) and **Notes** (the user's Obsidian vault, synced
-two ways, `notes` schema; protocol in `docs/notes-sync.md`).
+Live domains: **People** (personal CRM, `crm` schema), **Notes** (the user's Obsidian vault, synced
+two ways, `notes` schema; protocol in `docs/notes-sync.md`) and **Messages** (iMessage/SMS and WhatsApp archive,
+`messages` schema; `docs/messages.md`). Services use each other only through the **fabric** (`docs/fabric.md`):
+capabilities that answer a value or `Unavailable(reason)`, never an exception, so any service can be missing,
+turned off, unreadable or broken and the rest keeps working and says what's missing (`coverage`).
 
 **Read `ETHOS.md` before adding or changing a service.** It is the guiding document (also at `/ethos`).
 
@@ -18,10 +21,16 @@ each workspace's roles. Provision with `docker compose run --rm migrate python -
 create <slug> "<name>" --owner <username>` (also `list`, `add-member`, `adopt`). Control tables: `db/control`.
 
 ## Permissions (must stay complete)
-`cove/auth/policy.py` has the scopes. Every **public function in a service module** must be listed in the
-`policy.guard(...)` table at the bottom of that module (with its scope, `None` for any member, or `PURE`), and
-every **MCP tool** must be in `TOOL_SCOPES` in `mcp_server.py`. `tests/test_policy.py` fails otherwise. MCP
-requests authenticate with a `cove_pat_` token (`/settings/agents`); the token's name is the agent's actor label.
+`cove/auth/policy.py` has the scopes. Every **public function in a service module** (including each service's
+`fabric.py` providers and `cove/fabric/*`) must be listed in the `policy.guard(...)` table at the bottom of that
+module (with its scope, `None` for any member, or `PURE`), and every **MCP tool** must be in `TOOL_SCOPES` in
+`mcp_server.py`. `tests/test_policy.py` fails otherwise (add new modules to its list).
+Messages scopes (`messages:read|write|ingest`) are in no role's default for viewers and not in
+`DEFAULT_AGENT_SCOPES`. Token kinds: `device` (`cove_dev_`, notes sync), `personal` (`cove_pat_`, MCP and
+`/api/v1`) and `ingest` (`cove_ing_`, collectors: only `messages:ingest`, only on `/api/v1/messages/ingest/*`).
+MCP and personal-token API callers are **agents** (`Principal.agent`): they never see conversations hidden from
+agents or one-time codes.
+MCP requests authenticate with a `cove_pat_` token (`/settings/agents`); the token's name is the agent's actor label.
 
 ## Live context lives in the database, not here
 At the start of any session that touches data, call the MCP tools **`describe_system`** (domains, tables,
@@ -39,7 +48,8 @@ public: never commit hostnames, emails, tokens or personal data. See `SECURITY.m
 | migrate  | `python -m cove.control.migrate`: `db/control` → `cove_control`, then `db/migrations` → every workspace database (one failing is marked `needs_attention`, the rest go on), then exits. Also where privileged workspace commands run | — |
 | dbinit   | `db/roles.sh`: login roles (passwords from secrets) and databases, idempotent; runs before every migrate | — |
 | pocket-id | Pocket ID (passkey OIDC provider), state in its own `pocketid` database | 127.0.0.1:1411, tailnet :9443 |
-| web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` (hostname: see `CLAUDE.local.md`) |
+| web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, Notes at `/notes`, Messages at `/messages`, JSON API under `/api/v1/` (OpenAPI at `/api/v1/openapi.json`), catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` (hostname: see `CLAUDE.local.md`) |
+| worker   | `python -m cove.fabric.worker`: runs each service's event consumers (e.g. re-matching message senders when a contact changes) for every workspace, every 10 s | — |
 | mcp      | MCP SDK 2.x `MCPServer`, streamable HTTP (`cove.mcp_server`) | http://127.0.0.1:8765/mcp, and on the tailnet at `https://<host>:8443/mcp` (host allow-list: `COVE_MCP_EXTRA_HOSTS`) |
 | backup   | nightly encrypted (age) dump + attachments → `./backups`, restore drill, 14-day retention (`docs/backups.md`) | — |
 | offsite  | profile `offsite`: restic copy of `./backups` off-site (30 daily / 12 monthly) | — |
@@ -65,6 +75,18 @@ pastel washes and blurred shadows (the user rejected that look as "too AI"). Cop
   tombstones, blobs, device tokens). `notes/markdown.py` parses and renders Obsidian Markdown (sanitized with nh3).
 - `app/src/cove/web/notes_api.py` — token-authenticated sync API `/api/notes/*`; `web/notes_web.py` — `/notes`
   pages and `/settings/devices`.
+- `app/src/cove/fabric/` — the integration layer: `core` (manifests, `ask`/`gather`, `Result`/`Unavailable`,
+  coverage, refs `cove:<service>/<kind>/<id>`), `services` (`meta.services` enablement per workspace), `events`
+  (`meta.events` outbox, cursors), `aggregate` (`context_for`, `search_everything`), `worker`. Contracts are
+  JSON Schema in `schemas/contracts/*.v1.json`. Each service declares its manifest in `<service>/fabric.py`.
+- `app/src/cove/messages/` — `service.py` (the only reader/curator of messages; agent rules), `ingest.py` (bulk
+  ingest, `cove.messages.ingest/v1`), `normalize.py` (handles, OTP detection), `importers/whatsapp.py`.
+  Web: `web/messages_api.py` (`/api/v1/messages/*`), `web/messages_web.py` (`/messages`), `web/panels.py` (the
+  Messages panel on a contact page, fabric-only).
+- `collectors/imessage/` — the Mac collector (stdlib-only Python, launchd, Keychain token); tested from
+  `app/tests/test_imessage_collector.py` against a synthetic `chat.db`.
+- `app/src/cove/web/api_v1.py` — `/api/v1/` conventions (error envelope, cursors, `service_on`), fabric
+  endpoints, People and Notes JSON routes, `/api/v1/openapi.json`. `web/services_web.py` — `/settings/services`.
 - `app/src/cove/crm/vcard.py` — JSContact ⇄ vCard (RFC 9555 subset). vCard import 3.0/4.0, export 4.0.
 - `app/src/cove/templating.py` — generic path-based form templates (domain-agnostic).
 - `app/src/cove/mcp_server.py` — thin async MCP adapter over the service layer.
@@ -99,21 +121,42 @@ The home page (`web/hub.py`) builds its catalog from these, so nothing is hand-m
 in workspace databases, only `SET ROLE ws_<id>`; in `cove_control`: RW users/identities/sessions/memberships/
 api_tokens, INSERT-only security_events) · `cove_readonly` (`sql_query` login role: only `SET ROLE ws_<id>_ro`;
 read-only, 5s timeout) · `ws_<id>` (per workspace: RW crm/notes, agent notes; INSERT-only audit log) ·
-`ws_<id>_ro` (per workspace: SELECT, no token hashes) · `pocketid` (owns only the `pocketid` database).
+`ws_<id>_ro` (per workspace: SELECT, no token hashes, **nothing** in `messages` or `meta.events`, so
+`system:sql` can't get around `messages:read`) · `pocketid` (owns only the `pocketid` database).
 CONNECT is granted per database (`db/roles.sh`, `cove.control.workspaces`).
 Secrets (DB passwords, token pepper, session key) are Docker secrets in `./secrets/*.txt` (git-ignored; dir 700),
 read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` holds only non-secret settings.
 
 ## Common tasks
 - Rebuild & restart: `docker compose up -d --build`
-- Tests: `docker compose --profile test run --rm test` (uses `cove_test`, resets schemas per test)
+- Tests: `docker compose --profile test run --rm test` (uses `cove_test`, resets schemas per test; mounts
+  `collectors/` too). Most tests run as the database owner; grants are checked under the real workspace roles
+  in `test_workspaces.py` (a fresh workspace and one upgraded from the previous migration), so add new schemas
+  there. The test service runs `dbinit` against whatever Postgres the compose project has: to keep tests off a
+  live stack, use a separate project (`-p cove-test`) with its own image tag.
 - Identity schema change: `db/control/NNN_name.sql` (database `cove_control`, schema `control`).
 - Schema change: add `db/migrations/NNN_name.sql`, insert a row into `meta.changelog` in the same
   migration, grant to `cove_app`/`cove_readonly` as usual, then `docker compose run --rm migrate` (applies it to
   every workspace and moves the grants onto the workspace roles).
-- **Adding a new domain** (work through `ETHOS.md` › Checklist for a new service): new schema migration (+ grants + `meta.domains` row), a `<domain>/service.py`
-  following the CRM pattern (actor + audit + validation), MCP tools in `mcp_server.py`, web routes, and —
-  if records are document-shaped — a JSON Schema in `schemas/` and a form template in `templates/`.
-  Give it a service key + colour pair in `brand/services.json` and follow `brand/BRAND.md` › Building a new service.
+- **Adding a new domain** (Move, Money, Home, Reading…): work through `ETHOS.md` › Checklist for a new service.
+  Every service is optional to every other one (ETHOS principles 1–5; mechanics in `docs/fabric.md`):
+  1. Migration: its own schema, **no foreign keys, views or joins into another service's schema**
+     (`test_no_cross_schema_foreign_keys_or_views` scans `db/migrations`); links to other services are opaque ref
+     text columns. Explicit grants to `cove_app` (default privileges aren't relied on), decide what
+     `cove_readonly` may see, and insert `meta.domains`, `meta.services` and `meta.changelog` rows.
+  2. `<domain>/service.py` following the CRM pattern (actor + audit + validation, `guard` table). Anything
+     it needs from another service goes through `fabric.ask`/`fabric.gather`, with a written-down behaviour for
+     `Unavailable` (show less, never fail). Writes publish events with `fabric.publish(c, …)` in the same
+     transaction.
+  3. `<domain>/fabric.py`: a manifest providing at least `identity.describe` and `search.query` (and
+     `timeline.items` if it has dated things); add it to `fabric.core.SERVICE_MODULES`. Validate outputs against
+     the contracts in a test.
+  4. Surfaces: MCP tools with `meta={"service": "<key>"}`, routers with `tags=["<key>"]` and
+     `dependencies=[service_on("<key>")]` (pages under `/<key>`, JSON under `/api/v1/<key>/` with refs and
+     cursors), so turning it off hides all of it.
+  5. Tests that turn the service off and that turn its dependencies off, and check pages, tools and
+     `context_for` still answer with the right `coverage`. See `docs/fabric.md` › Adding a service.
+  6. A service key + colour pair in `brand/services.json` (AA-checked) and `cove.css`; follow
+     `brand/BRAND.md` › Building a new service. Document-shaped records get a JSON Schema in `schemas/`.
 - Never commit `.env`, `backups/`, or `*.vcf` (contact data).
 - Backups: `docs/backups.md`. The age private key is NOT on this machine; `backups/` only ever holds `*.age` files.

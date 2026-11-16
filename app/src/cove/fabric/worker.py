@@ -71,6 +71,8 @@ def main() -> None:
         if n:
             log.info("worker: handled %d events", n)
         if args.once:
+            from cove import db
+            db.close()   # close the pools so a one-off run exits at once
             return
         time.sleep(INTERVAL)
 

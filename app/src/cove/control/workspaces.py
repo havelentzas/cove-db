@@ -11,7 +11,7 @@ Provisioning creates, for a workspace with id <id> (first 12 hex digits of its u
     python -m cove.control.workspaces create <slug> <name> [--owner <username>]
     python -m cove.control.workspaces adopt <existing-db> <slug> <name> [--owner <username>]
     python -m cove.control.workspaces add-member <slug> <username> [owner|editor|viewer]
-    python -m cove.control.workspaces token <slug> <name> [--scopes a,b,…]
+    python -m cove.control.workspaces token <slug> <name> [--scopes a,b,…] [--kind ingest]
         an agent token made by the admin (before anyone can sign in, or for automation); default
         scopes are read-only plus agent memory. Printed once.
 
@@ -170,19 +170,26 @@ def add_member(slug: str, username: str, role: str = "editor") -> None:
                     "ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role", (ws["id"], user["id"], role))
 
 
-def admin_token(slug: str, name: str, scopes: list[str] | None = None) -> str:
+def admin_token(slug: str, name: str, scopes: list[str] | None = None, kind: str = "personal") -> str:
+    """A token for a workspace without signing in (bootstrap and scripts). kind: personal, or ingest (a write-only
+    message collector token carrying only messages:ingest)."""
     from cove.auth import policy, tokens
-    wanted = policy.expand(scopes) if scopes else policy.DEFAULT_AGENT_SCOPES
-    if not wanted:
-        raise Invalid(f"unknown scopes; choose from {', '.join(sorted(policy.ALL))}")
-    token = tokens.PREFIXES["personal"] + __import__("secrets").token_urlsafe(32)
+    if kind == "ingest":
+        wanted = policy.INGEST_SCOPES
+    else:
+        wanted = policy.expand(scopes) if scopes else policy.DEFAULT_AGENT_SCOPES
+        if wanted & policy.INGEST_SCOPES:
+            raise Invalid("messages:ingest goes on an ingest token: use --kind ingest")
+    if not wanted or kind not in ("personal", "ingest"):
+        raise Invalid(f"unknown scopes or kind; choose from {', '.join(sorted(policy.ALL))}")
+    token = tokens.PREFIXES[kind] + __import__("secrets").token_urlsafe(32)
     with migrate._connect(CONTROL_DB) as ctl:
         ws = ctl.execute("SELECT id FROM control.workspaces WHERE slug = %s", (slug,)).fetchone()
         if not ws:
             raise NotFound(f"no workspace '{slug}'")
         tid = ctl.execute("INSERT INTO control.api_tokens (workspace_id, kind, name, token_hash, scopes) "
-                          "VALUES (%s, 'personal', %s, %s, %s) RETURNING id",
-                          (ws["id"], name, tokens._hmac(token), sorted(wanted))).fetchone()["id"]
+                          "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                          (ws["id"], kind, name, tokens._hmac(token), sorted(wanted))).fetchone()["id"]
         ctl.execute("INSERT INTO control.security_events (kind, detail) VALUES ('token_created', %s)",
                     (__import__("json").dumps({"token_id": tid, "name": name, "by": "admin-cli", "workspace": slug}),))
     return token
@@ -194,6 +201,11 @@ def _main(argv: list[str]) -> int:
     if "--scopes" in argv:
         i = argv.index("--scopes")
         scopes = [x.strip() for x in argv[i + 1].split(",") if x.strip()]
+        argv = argv[:i] + argv[i + 2:]
+    kind = "personal"
+    if "--kind" in argv:
+        i = argv.index("--kind")
+        kind = argv[i + 1]
         argv = argv[:i] + argv[i + 2:]
     if "--owner" in argv:
         i = argv.index("--owner")
@@ -209,7 +221,7 @@ def _main(argv: list[str]) -> int:
         case ["adopt", existing, slug, name]:
             print(adopt(existing, slug, name, owner))
         case ["token", slug, name]:
-            print(admin_token(slug, name, scopes))
+            print(admin_token(slug, name, scopes, kind))
         case ["add-member", slug, username, *role]:
             add_member(slug, username, *(role or ["editor"]))
         case _:

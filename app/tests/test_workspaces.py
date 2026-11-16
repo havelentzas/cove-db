@@ -158,3 +158,77 @@ def test_adopt_renames_the_database_and_moves_tokens_and_blobs(real):
     short = uuid.UUID(ws["id"]).hex[:12]
     assert (workspaces.BLOB_ROOT / short / "ab" / "cd" / old_blob.name).read_bytes() == b"x"
     assert not old_blob.exists()
+
+
+# ------------------------------------------------------------------ messages under the real roles
+def _ingest_and_read(ws: dict) -> None:
+    """A synthetic batch in, read back through the service, a worker round, all as the real workspace role."""
+    from cove.fabric import worker
+    from cove.messages import ingest, service as messages
+    batch = {"format": "cove.messages.ingest/v1",
+             "source": {"key": "roles", "platform": "sms", "label": "Roles", "collector": "pytest/1"},
+             "conversations": [{"external_id": "c1", "platform": "sms", "kind": "direct",
+                                "participants": [{"platform": "sms", "value": "+31612345678"}]}],
+             "messages": [{"external_id": "r1", "conversation": "c1", "is_from_me": False,
+                           "sender": {"platform": "sms", "value": "+31612345678"},
+                           "sent_at": "2026-11-01T09:00:00Z", "body": "synthetic hello"}]}
+    with context.use(principal(ws)):
+        svc.create_contact(svc.build_card(full_name="Ada", phones=["+31612345678"]), "web:test")
+        assert ingest.ingest_batch(batch, "web:test")["accepted"] == 1
+        assert ingest.ingest_batch(batch, "web:test")["duplicates"] == 1
+        assert messages.search_messages("hello")["items"]
+    worker.run_workspace(workspaces.as_context(ws), prune=True)
+
+
+def _assert_grants(ws: dict) -> None:
+    with _login("cove_readonly", ws["db_name"]) as c:
+        c.execute(f'SET ROLE "{ws["role_name"]}_ro"')
+        for table in ("messages.messages", "messages.handles", "messages.conversations", "meta.events",
+                      "meta.event_cursors"):
+            with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                c.execute(f"SELECT * FROM {table} LIMIT 1")
+        c.execute("SELECT key FROM meta.services")          # enablement is fine to see
+    with _owner(ws["db_name"]) as c:
+        leftover = c.execute("SELECT count(*) FROM pg_class c, aclexplode(c.relacl) x JOIN pg_roles r "
+                             "ON r.oid = x.grantee WHERE r.rolname IN ('cove_app', 'cove_readonly')").fetchone()[0]
+        assert leftover == 0
+        assert c.execute("SELECT count(*) FROM meta.services").fetchone()[0] == 3
+
+
+def test_messages_under_real_roles_in_a_new_workspace(real):
+    ws = workspaces.create("ws-m", "M")
+    _ingest_and_read(ws)
+    _assert_grants(ws)
+
+
+def test_upgrading_an_existing_workspace_to_the_fabric_and_messages(real, monkeypatch, tmp_path):
+    """The live path: a workspace migrated up to 005 (default privileges already moved away) gets 006 and 007."""
+    import shutil
+    old = tmp_path / "db" / "migrations"
+    old.mkdir(parents=True)
+    for f in sorted((migrate.DB_DIR / "migrations").glob("*.sql")):
+        if f.name < "006":
+            shutil.copy(f, old)
+    full = migrate.DB_DIR
+    monkeypatch.setattr(migrate, "DB_DIR", tmp_path / "db")
+    ws = workspaces.create("ws-u", "U")
+    with _owner(ws["db_name"]) as c:
+        assert not c.execute("SELECT to_regclass('meta.services')").fetchone()[0]
+    monkeypatch.setattr(migrate, "DB_DIR", full)
+    assert migrate.fan_out("cove_test") == 0
+    _ingest_and_read(ws)
+    _assert_grants(ws)
+
+
+def test_admin_cli_makes_ingest_tokens_that_only_ingest(real):
+    from cove.auth import tokens
+    from cove.crm.service import Invalid
+    workspaces.create("ws-i", "I")
+    tok = workspaces.admin_token("ws-i", "mac", kind="ingest")
+    assert tok.startswith("cove_ing_")
+    row = tokens.verify(tok)
+    assert row["kind"] == "ingest" and row["effective"] == {"messages:ingest"}
+    with pytest.raises(Invalid):     # collector permissions never go on an agent token
+        workspaces.admin_token("ws-i", "agent", ["messages:ingest"])
+    with pytest.raises(Invalid):
+        workspaces.admin_token("ws-i", "x", kind="device")

@@ -6,26 +6,33 @@ logged conversations and notes together. The **fabric** (`app/src/cove/fabric/`)
 layer that makes this possible while keeping every service **optional**. A service can be missing, turned
 off, empty, slow or broken, and everything else still works and says what it couldn't include.
 
+The *why* lives in [`ETHOS.md`](../ETHOS.md) (also at `/ethos`): its heart ("integrations are managed,
+non-critical, yet available") and principles 1–5 are what this layer enforces. This document is the *how*.
+
 ## Principles
+
+These are the mechanics of ETHOS principles 1 (stand alone, connect deeply), 2 (one job, one owner),
+3 (connect through contracts, not internals), 4 (be honest about the gaps) and 5 (permissions travel with the
+caller), in the same vocabulary: opaque refs, capabilities, `Unavailable(reason)`, `coverage`, events.
 
 1. **Each service owns its schema and its writes.** No foreign keys, joins, views or writes across service
    schemas. Cross-service links are **opaque references** stored as text (see [Refs](#refs)). A service may
    cache a display label next to a reference, but never relies on it. Dropping or disabling a service never
-   breaks another service's migrations, queries or pages (`tests/test_fabric.py::test_no_cross_schema_foreign_keys`).
+   breaks another service's migrations, queries or pages (`tests/test_fabric.py::test_no_cross_schema_foreign_keys_or_views`) *(ETHOS 2, 3)*.
 2. **Integrations are optional by construction.** A consumer asks for a capability and gets either a value
    (`Result`) or an explicit `Unavailable(reason)`, never an exception. Every consumer has a defined behaviour
-   without the input: show less, never fail.
+   without the input: show less, never fail. *(ETHOS 1, 4)*
 3. **Partial results say so.** Anything that combines services carries
    `coverage: {"included": [...], "missing": [{"service", "reason"}]}`, so agents and the UI can tell
-   "nothing found" from "couldn't look".
+   "nothing found" from "couldn't look". *(ETHOS 4)*
 4. **Permissions travel with the caller.** A capability runs as the current principal and checks that
    principal's scopes. A token with `messages:read` but not `people:read` gets messages with raw sender
-   handles, plus `missing: [{service: people, reason: no_permission}]`. Never contact names by the back door.
+   handles, plus `missing: [{service: people, reason: no_permission}]`. Never contact names by the back door. *(ETHOS 5)*
 5. **Derived data is disposable.** Anything a service computes from another service (handle → contact
    resolution, "last messaged") is a cache rebuilt from events or a backfill. Deleting it loses nothing the
-   user typed (manual links are user data and are kept).
+   user typed (manual links are user data and are kept). *(ETHOS 3)*
 6. **Async over sync for side effects.** Services publish change events to an outbox. Consumers pull them
-   with their own cursor. A producer never waits on a consumer; a consumer that lags or crashes only hurts itself.
+   with their own cursor. A producer never waits on a consumer; a consumer that lags or crashes only hurts itself. *(ETHOS 3)*
 
 ## Refs
 
@@ -139,23 +146,31 @@ one envelope: `{"error": {"code": "not_found", "message": "…"}}`. Auth is a pe
 | provider too slow | `Unavailable(timeout)` after `COVE_FABRIC_TIMEOUT`; its late result is discarded |
 | consumer crashes | its cursor stays put; it retries next round; producers and other consumers are unaffected |
 
+`tests/test_degradation.py` runs the whole matrix: People, Notes and Messages × turned off, no permission,
+raising and too slow, through `/api/v1/fabric/context`, `/search` and `/capabilities` with a personal token.
+Every cell must be a 200 that names the missing service and keeps the others' parts.
+
 ## Adding a capability
 
 1. Write `schemas/contracts/<name>.v1.json` (`input` and `output` schemas, `description`).
 2. Add the provider function to the service's `fabric.py` manifest under `provides`, with its scope.
-3. Add a row to the table above, and a contract test (`tests/test_fabric.py` validates every provider's output
+3. Add a row to the table above, and a contract test (`tests/test_fabric_providers.py` and `tests/test_messages.py` validate each provider's output
    against its contract).
 
 ## Adding a service that degrades gracefully
 
+Work through `ETHOS.md` › Checklist for a new service; the fabric-specific steps are:
+
 1. Its migration creates its own schema (no foreign keys out of it), grants, a `meta.domains` row, a
    `meta.services` row and a `meta.changelog` row.
 2. `<service>/fabric.py` declares a manifest: `key`, `version`, `provides`, `consumes` (all optional) and
-   `publishes`. Add the module to `fabric.registry.SERVICE_MODULES`.
+   `publishes`. Add the module to `fabric.core.SERVICE_MODULES`.
 3. It provides at least `identity.describe` and `search.query` for its own refs, and `timeline.items` if it has
    anything dated.
 4. Everything it consumes goes through `fabric.ask` / `fabric.gather`, with a written-down behaviour for
    `Unavailable`. Add a test that turns the other service off and checks the page and tools still work.
 5. Writes publish events with `fabric.publish` inside the write's transaction.
-6. Its MCP tools carry `meta={"service": "<key>"}` and its routers `tags=["<key>"]`, so they are hidden when
+6. Add it to `SERVICES` in `tests/test_degradation.py`, and its schema to the real-role grant checks in
+   `tests/test_workspaces.py`.
+7. Its MCP tools carry `meta={"service": "<key>"}` and its routers `tags=["<key>"]`, so they are hidden when
    it's turned off and listed on the home page when it's on.
