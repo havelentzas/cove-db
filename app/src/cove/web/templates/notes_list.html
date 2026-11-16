@@ -1,11 +1,12 @@
 {% extends "notes_base.html" %}
 {% block title %}{% if q %}“{{ q }}”{% elif tag %}#{{ tag }}{% elif folder %}{{ folder }}{% else %}Notes{% endif %}{% endblock %}
-{% block body %}
+{% block notes_main %}
 <div class="page-head">
   <div>
     <div class="eyebrow">{{ svc.name }}</div>
-    <h1>{% if tag %}#{{ tag }}{% elif folder %}{{ folder }}{% else %}Notes{% endif %}</h1>
-    <p class="lede">{{ svc.blurb }}</p>
+    <h1>{% if tag %}#{{ tag }}{% elif folder %}{{ folder.rsplit('/', 1)[-1] }}{% else %}Notes{% endif %}</h1>
+    {% if folder %}<p class="eyebrow" style="margin:var(--s2) 0 0"><a href="/notes" style="color:inherit">Vault</a>{% for part in folder.split('/') %} / <a href="/notes?folder={{ folder.split('/')[:loop.index]|join('/')|urlencode }}" style="color:inherit">{{ part }}</a>{% endfor %}</p>
+    {% else %}<p class="lede">{{ svc.blurb }}</p>{% endif %}
   </div>
 </div>
 <div class="grid">
@@ -16,6 +17,21 @@
       {% if folder %}<input type="hidden" name="folder" value="{{ folder }}">{% endif %}
     </form>
     {% if tag or folder or q %}<p class="small" style="margin:var(--s3) 0 0"><a href="/notes">Clear filters</a></p>{% endif %}
+    {% if listing %}
+    <ul class="list" style="margin-top:var(--s3)">
+      {% for f in listing.folders %}
+      <li><a class="list-item" href="/notes?folder={{ f.path|urlencode }}">
+        <span class="avatar folder-icon" style="--size:38px" aria-hidden="true"></span>
+        <span class="grow"><span class="title">{{ f.name }}</span><span class="sub">{{ f.count }} item{{ 's' if f.count != 1 }}</span></span></a></li>
+      {% endfor %}
+      {% for x in listing.files %}
+      <li><a class="list-item" href="{{ '/notes/file/' ~ x.id ~ '/raw' if x.kind == 'attachment' else '/notes/view/' ~ x.id }}">
+        <span class="avatar" style="--size:38px">{{ x.title|initials if x.kind == 'note' else ('▦' if x.kind == 'canvas' else '◇') }}</span>
+        <span class="grow"><span class="title">{{ x.title if x.kind == 'note' else x.name }}</span><span class="sub">{{ x.kind }}</span></span></a></li>
+      {% endfor %}
+      {% if not listing.folders and not listing.files %}<li class="empty"><div class="display">Empty folder</div></li>{% endif %}
+    </ul>
+    {% else %}
     <ul class="list" style="margin-top:var(--s3)">
       {% for n in results %}
       <li><a class="list-item" href="/notes/view/{{ n.id }}">
@@ -36,6 +52,7 @@
       </li>
       {% endfor %}
     </ul>
+    {% endif %}
   </section>
   <aside>
     <section class="card accent">
@@ -46,14 +63,10 @@
         <div><div class="stat">{{ stats.devices }}</div><div class="eyebrow">devices</div></div>
       </div>
     </section>
-    {% if folders %}
-    <section class="card">
-      <h2>Folders</h2>
-      <ul class="list small">
-        {% for f in folders %}<li><a class="list-item" style="padding:6px 4px" href="/notes?folder={{ f.folder|urlencode }}"><span class="grow">{{ f.folder or '(top level)' }}</span><span class="meta">{{ f.files }}</span></a></li>{% endfor %}
-      </ul>
-    </section>
-    {% endif %}
+    <a class="card" href="/notes/graph" style="display:block;text-decoration:none;color:inherit">
+      <h2 style="margin-bottom:var(--s1)">{{ icon('link') }} Graph view</h2>
+      <p class="small muted" style="margin:0">See how your notes link together.</p>
+    </a>
     {% if tags %}
     <section class="card">
       <h2>Tags</h2>

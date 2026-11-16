@@ -593,3 +593,129 @@ def verify_token(token: str, scope: str = "notes") -> dict | None:
 
 def guess_mime(path: str) -> str:
     return mimetypes.guess_type(path)[0] or "application/octet-stream"
+
+
+# ================================================================ graph & folder tree
+_cache: dict[str, tuple[int, Any]] = {}
+
+
+def _head_seq(c) -> int:
+    return c.execute("SELECT coalesce(max(seq), 0) AS s FROM notes.files").fetchone()["s"]
+
+
+def _cached(name: str, build):
+    """Recompute only when the vault changed (any write bumps the change-feed head)."""
+    with db.conn() as c:
+        head = _head_seq(c)
+    hit = _cache.get(name)
+    if hit and hit[0] == head:
+        return hit[1]
+    value = build()
+    _cache[name] = (head, value)
+    return value
+
+
+def _graph_full() -> dict:
+    with db.conn() as c:
+        files = c.execute("SELECT id, kind, path, title, tags FROM notes.files WHERE deleted_at IS NULL").fetchall()
+        links = c.execute("""SELECT l.from_id, l.target, l.target_key, l.kind FROM notes.links l
+                               JOIN notes.files f ON f.id = l.from_id AND f.deleted_at IS NULL""").fetchall()
+    by_path: dict[str, dict] = {}
+    by_name: dict[str, dict] = {}
+    for f in sorted(files, key=lambda f: len(f["path"])):          # shortest path wins name matches
+        full, name = md.path_keys(f["path"])
+        by_path.setdefault(full, f)
+        by_name.setdefault(name, f)
+    nodes = {str(f["id"]): {"id": str(f["id"]), "kind": f["kind"], "title": f["title"], "path": f["path"],
+                            "folder": f["path"].rsplit("/", 1)[0] if "/" in f["path"] else "",
+                            "tags": f["tags"] or []} for f in files}
+    edges, unresolved = set(), {}
+    for l in links:
+        src = str(l["from_id"])
+        hit = by_path.get(l["target_key"]) or by_name.get(l["target_key"])
+        if hit:
+            dst = str(hit["id"])
+            if dst != src:
+                edges.add((src, dst, "embed" if l["kind"] == "embed" else "link"))
+        else:
+            key = "missing:" + l["target_key"]
+            unresolved.setdefault(key, {"id": key, "kind": "unresolved", "title": l["target"], "path": None,
+                                        "folder": "", "tags": []})
+            edges.add((src, key, "unresolved"))
+    return {"nodes": nodes, "edges": edges, "unresolved": unresolved}
+
+
+def graph(focus: str | None = None, depth: int = 1, attachments: bool = False, tags: bool = False,
+          unresolved: bool = False, orphans: bool = True) -> dict:
+    """Obsidian-style graph: notes are nodes, resolved [[links]]/embeds are edges.
+    `focus` + `depth` gives a local graph (neighbourhood, links followed in both directions)."""
+    full = _cached("graph", _graph_full)
+    nodes = dict(full["nodes"])
+    edges = list(full["edges"])
+    if unresolved:
+        nodes.update(full["unresolved"])
+    if tags:
+        for n in list(nodes.values()):
+            for t in n["tags"]:
+                tid = "tag:" + t.lower()
+                nodes.setdefault(tid, {"id": tid, "kind": "tag", "title": "#" + t, "path": None, "folder": "", "tags": []})
+                edges.append((n["id"], tid, "tag"))
+    keep = {k for k, n in nodes.items() if n["kind"] != "attachment" or attachments}
+    edges = [e for e in edges if e[0] in keep and e[1] in keep]
+    if focus:
+        focus = str(focus)
+        adj: dict[str, set[str]] = {}
+        for a, b, _ in edges:
+            adj.setdefault(a, set()).add(b)
+            adj.setdefault(b, set()).add(a)
+        seen, frontier = {focus}, {focus}
+        for _ in range(max(1, min(int(depth), 4))):
+            frontier = {m for n in frontier for m in adj.get(n, ())} - seen
+            seen |= frontier
+        keep &= seen
+        edges = [e for e in edges if e[0] in keep and e[1] in keep]
+    degree: dict[str, int] = {}
+    for a, b, _ in edges:
+        degree[a] = degree.get(a, 0) + 1
+        degree[b] = degree.get(b, 0) + 1
+    if not orphans and not focus:
+        keep = {k for k in keep if degree.get(k)}
+    out_nodes = [{**{k: v for k, v in nodes[k].items() if k != "tags"}, "degree": degree.get(k, 0)} for k in keep]
+    return {"nodes": out_nodes, "links": [{"source": a, "target": b, "kind": k} for a, b, k in edges
+                                          if a in keep and b in keep], "focus": focus}
+
+
+def _tree_full() -> dict:
+    with db.conn() as c:
+        rows = c.execute("SELECT id, kind, path, title FROM notes.files WHERE deleted_at IS NULL").fetchall()
+    root = {"name": "", "path": "", "folders": {}, "files": [], "count": 0}
+    for r in rows:
+        parts = r["path"].split("/")
+        node = root
+        node["count"] += 1
+        for i, part in enumerate(parts[:-1]):
+            node = node["folders"].setdefault(part, {"name": part, "path": "/".join(parts[:i + 1]),
+                                                      "folders": {}, "files": [], "count": 0})
+            node["count"] += 1
+        node["files"].append({"id": str(r["id"]), "kind": r["kind"], "name": parts[-1], "title": r["title"],
+                              "path": r["path"]})
+
+    def finish(n: dict) -> dict:
+        return {**n, "folders": [finish(f) for f in sorted(n["folders"].values(), key=lambda f: f["name"].lower())],
+                "files": sorted(n["files"], key=lambda f: f["name"].lower())}
+    return finish(root)
+
+
+def tree() -> dict:
+    """The vault's folder structure (all live files), sorted like Obsidian's file explorer."""
+    return _cached("tree", _tree_full)
+
+
+def folder(path: str) -> dict | None:
+    """One folder of the tree: its direct subfolders and files."""
+    node = tree()
+    for part in [p for p in (path or "").strip("/").split("/") if p]:
+        node = next((f for f in node["folders"] if f["name"] == part), None)
+        if node is None:
+            return None
+    return node

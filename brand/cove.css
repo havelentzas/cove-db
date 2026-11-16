@@ -347,6 +347,36 @@ dialog.sheet h3:first-child { margin-top: 0; }
 .props dd { margin: 0; overflow-wrap: anywhere; }
 pre.source { white-space: pre-wrap; background: var(--bg-sunk); border-radius: var(--r-md); padding: var(--s4); font: 13px/1.6 var(--font-mono); max-width: 100%; overflow-x: auto; }
 
+/* ---------- Notes: vault tree + graph ----------------------------------------- */
+main.page.wide { max-width: 1480px; }
+body:has(main.page.wide) .shell-header .inner, body:has(main.page.wide) .shell-footer { max-width: 1480px; }
+.notes-shell { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: var(--s5); align-items: start; }
+.vault-tree { position: sticky; top: 88px; max-height: calc(100vh - 110px); overflow: auto; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--r-lg); padding: var(--s3) var(--s2) var(--s3) var(--s3); }
+.vault-tree > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; padding: 2px 6px var(--s2); }
+.vault-tree > summary::-webkit-details-marker { display: none; }
+.tree { font-size: var(--fs-sm); }
+.tree a { color: var(--ink); text-decoration: none; }
+.tree summary { list-style: none; display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: var(--r-sm); cursor: pointer; }
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary a { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree summary:hover, .tree-file:hover { background: var(--bg-sunk); }
+.tree .caret { width: 0; height: 0; border: 4px solid transparent; border-left: 5px solid var(--muted); margin-right: 2px; transition: transform var(--t-fast); flex: none; }
+.tree details[open] > summary .caret { transform: rotate(90deg) translateX(2px); }
+.tree .count, .vault-tree .count { font: 400 var(--fs-2xs)/1 var(--font-mono); color: var(--muted); }
+.tree-children { margin-left: 11px; padding-left: 6px; border-left: 1px solid var(--line); }
+.tree-file { display: block; padding: 3px 6px 3px 18px; border-radius: var(--r-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-file.kind-attachment, .tree-file.kind-canvas { color: var(--muted); }
+.tree .current { background: var(--accent-soft); color: var(--accent); font-weight: 700; box-shadow: inset 3px 0 0 var(--signal); }
+.folder-icon { position: relative; }
+.folder-icon::after { content: ""; width: 18px; height: 13px; border: 2px solid currentColor; border-radius: 2px 3px 3px 3px; box-shadow: inset 0 3px 0 -1px currentColor; }
+.graph-box { position: relative; width: 100%; border-radius: var(--r-md); background: var(--bg); border: 1px solid var(--line); overflow: hidden; touch-action: none; }
+.graph-controls { margin-bottom: var(--s3); }
+@media (max-width: 900px) {
+  .notes-shell { grid-template-columns: 1fr; }
+  .vault-tree { position: static; max-height: 60vh; }
+}
+
 /* ---------- Feedback ------------------------------------------------------ */
 .notice { display: flex; gap: var(--s2); align-items: center; border-radius: var(--r-md); padding: var(--s3) var(--s4); margin-bottom: var(--s4); background: var(--panel); color: var(--ink); border: 1.5px solid var(--ink); box-shadow: inset 6px 0 0 var(--signal); padding-left: calc(var(--s4) + 6px); }
 .notice.error { display: block; background: var(--danger-soft); border-color: var(--danger); box-shadow: inset 6px 0 0 var(--danger); }

@@ -34,7 +34,7 @@
     {% block header_action %}<a class="btn" href="/contacts/new">{{ icon('plus') }}Add someone</a>{% endblock %}
   </div>
 </header>
-<main class="page">{% block body %}{% endblock %}</main>
+<main class="page {% block page_class %}{% endblock %}">{% block body %}{% endblock %}</main>
 <footer class="shell-footer">
   <span class="eyebrow">cove · personal databases</span>
   <a href="/" class="muted" style="text-decoration:none">All services</a>

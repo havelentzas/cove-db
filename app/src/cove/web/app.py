@@ -10,6 +10,7 @@ from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, FastAPI, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -22,6 +23,7 @@ HERE = Path(__file__).parent
 TEMPLATE_NAME = "contact-default"
 
 app = FastAPI(title="cove", docs_url=None, redoc_url=None)
+app.add_middleware(GZipMiddleware, minimum_size=1024)   # the vault tree makes Notes pages large
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 app.mount("/brand", StaticFiles(directory=brand.BRAND_DIR), name="brand")
 people = APIRouter(tags=["people"])   # every People route; the home page lists these

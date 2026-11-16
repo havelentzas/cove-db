@@ -1,0 +1,51 @@
+{% extends "notes_base.html" %}
+{% block title %}{{ 'Graph · ' ~ focus_title if focus_title else 'Graph' }}{% endblock %}
+{% block head %}<script src="/static/d3.min.js" defer></script><script src="/static/graph.js" defer></script>{% endblock %}
+{% block notes_main %}
+<div class="page-head" style="margin-bottom:var(--s4)">
+  <div>
+    <div class="eyebrow">{{ svc.name }}</div>
+    <h1>{% if focus_title %}Around “{{ focus_title }}”{% else %}Graph{% endif %}</h1>
+  </div>
+</div>
+<section class="card tight graph-card">
+  <form class="actions graph-controls" onsubmit="return false">
+    <div class="search" style="flex:1 1 220px">{{ icon('search') }}<input id="g-search" type="search" placeholder="Highlight notes…" aria-label="Highlight notes" style="min-height:40px;font-size:var(--fs-md)"></div>
+    {% if focus %}
+    <label class="toggle-chip">Depth <select id="g-depth" class="select-chip" style="min-height:0;border:0;padding:0 4px;background:transparent">{% for d in [1,2,3,4] %}<option {% if d == depth %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+    <a class="toggle-chip" href="/notes/graph" style="text-decoration:none">Whole vault</a>
+    {% endif %}
+    <label class="toggle-chip"><input type="checkbox" id="g-tags">Tags</label>
+    <label class="toggle-chip"><input type="checkbox" id="g-attachments">Attachments</label>
+    <label class="toggle-chip"><input type="checkbox" id="g-unresolved">Unresolved</label>
+    <label class="toggle-chip"><input type="checkbox" id="g-orphans" checked>Orphans</label>
+    <button type="button" class="secondary" id="g-fit">Fit</button>
+  </form>
+  <div id="graph" class="graph-box" style="height:calc(100vh - 300px);min-height:420px"></div>
+  <p class="xs muted mono" id="g-stats" style="margin:var(--s2) 0 0">loading…</p>
+</section>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("graph"), $ = id => document.getElementById(id);
+  let g = null;
+  function draw(data) {
+    if (g) g.destroy();
+    g = coveGraph(el, data, { focus: {{ ('"' ~ focus ~ '"') if focus else 'null' }}, preTicks: 300,
+                              onOpen: n => n.url && (location.href = n.url) });
+    $("g-stats").textContent = `${g.stats.nodes} nodes · ${g.stats.links} links · scroll to zoom, drag to move, click to open`;
+    if ($("g-search").value) g.search($("g-search").value);
+  }
+  async function load() {
+    const p = new URLSearchParams();
+    {% if focus %}p.set("focus", "{{ focus }}"); p.set("depth", $("g-depth").value);{% endif %}
+    for (const k of ["tags", "attachments", "unresolved", "orphans"]) p.set(k, $("g-" + k).checked ? "1" : "0");
+    draw(await (await fetch("/notes/graph.json?" + p)).json());
+  }
+  for (const k of ["tags", "attachments", "unresolved", "orphans"]) $("g-" + k).addEventListener("change", load);
+  {% if focus %}$("g-depth").addEventListener("change", load);{% endif %}
+  $("g-fit").addEventListener("click", () => g && g.fit());
+  $("g-search").addEventListener("input", e => { if (!g) return; const hits = g.search(e.target.value); if (hits.length === 1) g.focusNode(hits[0]); });
+  draw({{ graph|tojson }});    // first paint uses data embedded in the page
+});
+</script>
+{% endblock %}

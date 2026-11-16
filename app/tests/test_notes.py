@@ -188,3 +188,30 @@ def test_sync_api(database, blobs):
     page = c.get(f"/notes/view/{f}")
     assert page.status_code == 200 and "Hello" in page.text
     assert "device (phone)" in page.text
+
+
+def test_graph_and_folder_tree(database):
+    a, b, c, d = nid(), nid(), nid(), nid()
+    n.put_text(a, "Areas/Econ/Hub.md", "[[Leaf]] [[Other]] [[Ghost]] #topic", None, A)
+    n.put_text(b, "Areas/Econ/Leaf.md", "back to [[Hub]]", None, A)
+    n.put_text(c, "Inbox/Other.md", "[[Far]]", None, A)
+    n.put_text(d, "Far.md", "end", None, A)
+    g = n.graph()
+    ids = {x["id"] for x in g["nodes"]}
+    assert ids == {a, b, c, d}
+    pairs = {(l["source"], l["target"]) for l in g["links"]}
+    assert (a, b) in pairs and (b, a) in pairs and (a, c) in pairs and (c, d) in pairs
+    hub = next(x for x in g["nodes"] if x["id"] == a)
+    assert hub["degree"] == 3
+    local1 = {x["id"] for x in n.graph(a, 1)["nodes"]}
+    assert local1 == {a, b, c}                         # Far is two hops away
+    assert d in {x["id"] for x in n.graph(a, 2)["nodes"]}
+    full = n.graph(tags=True, unresolved=True)
+    assert any(x["kind"] == "tag" and x["title"] == "#topic" for x in full["nodes"])
+    assert any(x["kind"] == "unresolved" and x["title"] == "Ghost" for x in full["nodes"])
+    t = n.tree()
+    assert [f["name"] for f in t["folders"]] == ["Areas", "Inbox"] and t["count"] == 4
+    econ = n.folder("Areas/Econ")
+    assert [f["name"] for f in econ["files"]] == ["Hub.md", "Leaf.md"] and n.folder("Nope") is None
+    n.rename(d, "Inbox/Far.md", 1, A)                  # cache invalidates on any write
+    assert [f["name"] for f in n.folder("Inbox")["files"]] == ["Far.md", "Other.md"]

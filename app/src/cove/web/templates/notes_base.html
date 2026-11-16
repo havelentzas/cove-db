@@ -1,7 +1,37 @@
 {% extends "base.html" %}
+{#- Notes pages: the vault's folder tree on the left (mirrors Obsidian's file explorer), content on the right. -#}
+{% macro tree_node(node, here) %}
+  {%- for f in node.folders %}
+  {%- set open = here == f.path or here.startswith(f.path ~ '/') %}
+  <details class="tree-folder" {% if open %}open{% endif %}>
+    <summary><span class="caret" aria-hidden="true"></span><a href="/notes?folder={{ f.path|urlencode }}" class="{{ 'current' if here == f.path }}">{{ f.name }}</a><span class="count">{{ f.count }}</span></summary>
+    <div class="tree-children">{{ tree_node(f, here) }}</div>
+  </details>
+  {%- endfor %}
+  {%- for x in node.files %}
+  <a class="tree-file kind-{{ x.kind }} {{ 'current' if here == x.path }}" href="{{ '/notes/file/' ~ x.id ~ '/raw' if x.kind == 'attachment' else '/notes/view/' ~ x.id }}" title="{{ x.path }}">{{ x.title if x.kind == 'note' else x.name }}</a>
+  {%- endfor %}
+{%- endmacro %}
+{% block page_class %}wide{% endblock %}
 {% block nav %}
-  <a href="/notes" {% if request.url.path == '/notes' %}aria-current="page"{% endif %}>All notes</a>
+  <a href="/notes" {% if request.url.path == '/notes' and not request.query_params.get('folder') %}aria-current="page"{% endif %}>All notes</a>
+  <a href="/notes/graph" {% if request.url.path == '/notes/graph' %}aria-current="page"{% endif %}>Graph</a>
   <a href="/settings/devices" {% if request.url.path.startswith('/settings') %}aria-current="page"{% endif %}>Devices</a>
 {% endblock %}
 {% block header_action %}{% endblock %}
 {% block footer_action %}<a href="/" class="muted" style="text-decoration:none">{{ icon('arrow-left') }} All services</a>{% endblock %}
+{% block body %}
+<div class="notes-shell">
+  <details class="vault-tree" open>
+    <summary class="eyebrow">Vault <span class="count">{{ tree.count }}</span></summary>
+    <nav class="tree" aria-label="Vault folders">{{ tree_node(tree, here or '') }}</nav>
+  </details>
+  <div class="notes-main">{% block notes_main %}{% endblock %}</div>
+</div>
+<script>
+  // keep the current file/folder visible in a long tree
+  (function(){ var c=document.querySelector('.tree .current'); if(c) c.scrollIntoView({block:'center'}); })();
+  // on phones the tree starts collapsed
+  if (window.matchMedia('(max-width: 900px)').matches) document.querySelector('.vault-tree').removeAttribute('open');
+</script>
+{% endblock %}
