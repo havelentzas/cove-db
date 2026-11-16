@@ -5,7 +5,7 @@ description = "cove-db: personal life databases behind an MCP server and web UI"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
+    "uvicorn[standard]>=0.54.0",
     "jinja2>=3.1",
     "python-multipart>=0.0.12",
     "psycopg[binary,pool]>=3.2",
