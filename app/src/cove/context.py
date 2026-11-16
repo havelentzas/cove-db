@@ -33,6 +33,7 @@ class Principal:
     user_id: str | None = None
     role: str = "owner"    # membership role (owner / editor / viewer)
     scopes: frozenset[str] = field(default_factory=frozenset)   # effective: role ∩ token (cove.auth.policy)
+    agent: bool = False    # MCP or personal-token API caller: hidden and sensitive data is left out for it
 
 
 _current: ContextVar[Principal | None] = ContextVar("cove_principal", default=None)

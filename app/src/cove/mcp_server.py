@@ -20,7 +20,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
-from cove import context
+from cove import context, fabric
 from cove.auth import policy, tokens
 from cove.crm import service as svc
 from cove.notes import service as notes
@@ -71,13 +71,27 @@ class ScopedMCP(MCPServer):
     async def all_tools(self):
         return await super().list_tools()
 
+    async def _off(self) -> set[str]:
+        """Services turned off (or not installed) in this workspace: their tools are hidden."""
+        states = await anyio.to_thread.run_sync(fabric.states)
+        return {k for k, v in states.items() if v != "enabled"}
+
+    @staticmethod
+    def _service(tool) -> str:
+        return (getattr(tool, "meta", None) or {}).get("service") or "core"
+
     async def list_tools(self):
-        return [t for t in await super().list_tools() if policy.allows(TOOL_SCOPES.get(t.name, "-"))]
+        off = await self._off()
+        return [t for t in await super().list_tools()
+                if policy.allows(TOOL_SCOPES.get(t.name, "-")) and self._service(t) not in off]
 
     async def call_tool(self, name, arguments, *args, **kwargs):
         if not policy.allows(TOOL_SCOPES.get(name, "-")):
             raise ToolError(f"This token isn't allowed to use {name}. Ask the user to grant "
                             f"'{TOOL_SCOPES.get(name)}' at /settings/agents.")
+        tool = next((t for t in await super().list_tools() if t.name == name), None)
+        if tool is not None and self._service(tool) in await self._off():
+            raise ToolError(f"{name} belongs to {self._service(tool)}, which is turned off in this workspace.")
         for key in ("contact_ids",):
             if isinstance(arguments.get(key), list) and len(arguments[key]) > MAX_BULK:
                 raise ToolError(f"At most {MAX_BULK} contacts per call; split the work into batches.")
@@ -342,7 +356,7 @@ class BearerAuth:
             await send({"type": "http.response.body", "body": body})
             return
         principal = context.Principal(actor=f"mcp:{tok['name']}", workspace=tok["workspace"], user_id=tok["user_id"],
-                                      role=tok["role"], scopes=tok["effective"])
+                                      role=tok["role"], scopes=tok["effective"], agent=True)
         reset = context.set_current(principal)
         try:
             await self.app(scope, receive, send)

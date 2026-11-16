@@ -428,3 +428,13 @@ details > summary { cursor: pointer; font-weight: 600; }
   .gate-hero { border-right: 0; border-bottom: 1.5px solid var(--ink); padding-top: var(--s6); padding-bottom: var(--s5); }
   .gate-hero .display { max-width: none; }
 }
+
+/* ---------- Services & integrations (the fabric) ------------------------------ */
+.row > .grow { flex: 1 1 240px; }
+.svc-row { border: 1.5px solid var(--ink); box-shadow: inset 6px 0 0 var(--signal); padding-left: calc(var(--s5) + 6px); }
+.svc-row h2 .mark { width: 26px; height: 26px; color: var(--signal); flex: none; }
+.caps { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; margin-top: var(--s3); }
+.caps .eyebrow { margin-right: var(--s2); min-width: 110px; }
+/* "couldn't look": a cross-service answer that is missing a part says so, quietly */
+.coverage { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; font: 500 var(--fs-2xs)/1.4 var(--font-mono); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.coverage .gap { border: 1px dashed var(--line-strong); border-radius: var(--r-xs); padding: 2px 6px; }

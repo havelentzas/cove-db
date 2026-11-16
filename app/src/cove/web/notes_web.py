@@ -11,8 +11,9 @@ from cove import brand
 from cove.crm.service import NotFound
 from cove.notes import markdown as md
 from cove.notes import service as notes
+from cove.web.api_v1 import service_on
 
-router = APIRouter(tags=["notes"])
+router = APIRouter(tags=["notes"], dependencies=[service_on("notes")])
 settings = APIRouter(tags=["core"])
 SVC = None
 

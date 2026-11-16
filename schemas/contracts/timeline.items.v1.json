@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cove.invalid/contracts/timeline.items.v1.json",
+  "title": "timeline.items v1",
+  "description": "Dated things, newest first, optionally about one subject (a person ref). Messages summarise per conversation per day, never per message.",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^cove:[a-z][a-z0-9_]*/[a-z_]+/[A-Za-z0-9._:-]+$"
+    }
+  },
+  "input": {
+    "type": "object",
+    "properties": {
+      "subject_ref": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "since": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "until": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200
+      },
+      "cursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "output": {
+    "type": "object",
+    "required": [
+      "items",
+      "next_cursor"
+    ],
+    "properties": {
+      "next_cursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "ref",
+            "service",
+            "kind",
+            "occurred_at",
+            "title",
+            "excerpt",
+            "participants",
+            "url"
+          ],
+          "properties": {
+            "ref": {
+              "$ref": "#/$defs/ref"
+            },
+            "service": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "occurred_at": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "excerpt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "participants": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ref"
+              }
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

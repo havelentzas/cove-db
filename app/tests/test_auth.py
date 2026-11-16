@@ -44,6 +44,8 @@ def test_every_route_requires_sign_in(database):
         r = c.request(method, url, headers={"origin": PUBLIC})
         if path.startswith(auth.TOKEN_PREFIXES):
             assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer", (method, path)
+        elif path.startswith(auth.API_PREFIX):   # JSON API: 401 with the error envelope, never a redirect
+            assert r.status_code == 401 and r.json()["error"]["code"] == "unauthorized", (method, path)
         elif method == "GET":
             assert r.status_code == 303 and r.headers["location"].startswith("/login?next="), (method, path)
         else:

@@ -9,6 +9,9 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, FastAPI, Form, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -17,7 +20,7 @@ from jinja2 import pass_context
 
 from cove import brand, context
 from cove.auth import policy
-from cove.web import agents, auth, hub, notes_api, notes_web, security
+from cove.web import agents, api_v1, auth, hub, notes_api, notes_web, security, services_web
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -28,7 +31,7 @@ app = FastAPI(title="cove", docs_url=None, redoc_url=None)
 app.add_middleware(GZipMiddleware, minimum_size=1024)   # the vault tree makes Notes pages large
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 app.mount("/brand", StaticFiles(directory=brand.BRAND_DIR), name="brand")
-people = APIRouter(tags=["people"])   # every People route; the home page lists these
+people = APIRouter(tags=["people"], dependencies=[api_v1.service_on("people")])   # every People page
 pages = Jinja2Templates(directory=HERE / "templates")
 pages.env.globals.update(INTERACTION_KINDS=svc.INTERACTION_KINDS, RELATION_TYPES=svc.RELATION_TYPES,
                          SERVICE=brand.service("people"), SERVICES=brand.registry()["services"],
@@ -385,13 +388,21 @@ def export(tag: str = "", archived: bool = False):
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
+def _api(request: Request) -> bool:
+    return request.url.path.startswith(api_v1.PREFIX + "/")
+
+
 @app.exception_handler(svc.NotFound)
 def not_found(request: Request, exc: svc.NotFound):
+    if _api(request):
+        return auth.api_error("not_found", str(exc), 404)
     return PlainTextResponse(str(exc), status_code=404)
 
 
 @app.exception_handler(policy.Forbidden)
 def forbidden(request: Request, exc: policy.Forbidden):
+    if _api(request):
+        return auth.api_error("forbidden", str(exc), 403)
     if request.url.path.startswith("/api/"):
         return JSONResponse({"detail": str(exc)}, status_code=403)
     return PlainTextResponse(f"You don't have permission to do that here ({exc}). Ask the workspace owner.",
@@ -400,7 +411,41 @@ def forbidden(request: Request, exc: policy.Forbidden):
 
 @app.exception_handler(svc.Invalid)
 def invalid(request: Request, exc: svc.Invalid):
+    if _api(request):
+        return auth.api_error("invalid", str(exc), 422)
     return PlainTextResponse(f"Invalid input: {exc}", status_code=422)
+
+
+@app.exception_handler(svc.Conflict)
+def conflict(request: Request, exc: svc.Conflict):
+    if _api(request):
+        return auth.api_error("conflict", str(exc), 409)
+    return PlainTextResponse(f"Conflict: {exc}", status_code=409)
+
+
+@app.exception_handler(api_v1.ServiceOff)
+def service_off(request: Request, exc: api_v1.ServiceOff):
+    if _api(request) or request.url.path.startswith("/api/"):
+        return auth.api_error("service_off", str(exc), 404)
+    return pages.TemplateResponse(request, "service_off.html", {"svc": hub.CORE, "off": exc}, status_code=404)
+
+
+@app.exception_handler(HTTPException)
+async def http_error(request: Request, exc: HTTPException):
+    if _api(request):
+        code = {401: "unauthorized", 403: "forbidden", 404: "not_found", 405: "method_not_allowed",
+                413: "too_large"}.get(exc.status_code, "error")
+        return auth.api_error(code, str(exc.detail), exc.status_code, getattr(exc, "headers", None))
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    if _api(request):
+        first = (exc.errors() or [{}])[0]
+        where = ".".join(str(x) for x in first.get("loc", ()) if x != "body")
+        return auth.api_error("invalid", f"{where}: {first.get('msg', 'invalid input')}".strip(": "), 422)
+    return await request_validation_exception_handler(request, exc)
 
 
 app.include_router(auth.router)
@@ -410,6 +455,9 @@ app.include_router(hub.router)
 app.include_router(notes_web.router)
 app.include_router(notes_web.settings)
 app.include_router(notes_api.router)
+app.include_router(services_web.router)
+app.include_router(api_v1.fabric_router)
+app.include_router(api_v1.meta_router)
 
 
 @app.get("/healthz")

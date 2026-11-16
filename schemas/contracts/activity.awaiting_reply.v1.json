@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cove.invalid/contracts/activity.awaiting_reply.v1.json",
+  "title": "activity.awaiting_reply v1",
+  "description": "Conversations whose last message came from someone else and has gone unanswered for a while, oldest wait first.",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^cove:[a-z][a-z0-9_]*/[a-z_]+/[A-Za-z0-9._:-]+$"
+    }
+  },
+  "input": {
+    "type": "object",
+    "properties": {
+      "refs": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      },
+      "days": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 365
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200
+      }
+    }
+  },
+  "output": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": [
+        "ref",
+        "title",
+        "subject_refs",
+        "last_inbound_at",
+        "url"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "title": {
+          "type": "string"
+        },
+        "subject_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "last_inbound_at": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

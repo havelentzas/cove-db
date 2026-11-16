@@ -16,8 +16,9 @@ PUBLIC = "https://cove.test"
 
 # ------------------------------------------------------------------ coverage: nothing left unguarded
 def test_every_service_function_is_guarded():
-    assert policy.unguarded(svc) == []
-    assert policy.unguarded(notes) == []
+    from cove.fabric import aggregate, core, events, services
+    for module in (svc, notes, core, services, events, aggregate):
+        assert policy.unguarded(module) == [], module.__name__
 
 
 async def _tool_names():

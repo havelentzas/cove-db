@@ -112,6 +112,18 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Fabric worker (cove.fabric.worker): runs each service's event consumers for every workspace, e.g.
+  # re-resolving message senders when a contact changes. Its own container so a slow or failing consumer
+  # never holds up the web app (docs/fabric.md). No ports, no internet.
+  worker:
+    <<: *app
+    command: ["python", "-m", "cove.fabric.worker"]
+    mem_limit: 256m
+    cpus: 0.5
+    secrets: [app_password]
+    networks: [db]
+    volumes: []
+
   # Pocket ID: passkey sign-in (OIDC provider). All state, including uploads, lives in its own
   # Postgres database (pocketid), so there is no volume and it is covered by the nightly backup.
   pocket-id:

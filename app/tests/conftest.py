@@ -25,7 +25,7 @@ def _up_sql(path: Path) -> str:
 
 @pytest.fixture()
 def database():
-    """Fresh crm/meta/notes schemas, and the control schema (normally its own database), in cove_test."""
+    """Fresh crm/meta/notes/messages schemas, and the control schema (normally its own database), in cove_test."""
     url = os.environ.get("COVE_TEST_DATABASE_URL")
     if not url:
         pytest.skip("COVE_TEST_DATABASE_URL not set")
@@ -33,6 +33,7 @@ def database():
         c.execute("DROP SCHEMA IF EXISTS crm CASCADE")
         c.execute("DROP SCHEMA IF EXISTS meta CASCADE")
         c.execute("DROP SCHEMA IF EXISTS notes CASCADE")
+        c.execute("DROP SCHEMA IF EXISTS messages CASCADE")
         c.execute("DROP SCHEMA IF EXISTS control CASCADE")
         for f in [*sorted(MIGRATIONS.glob("*.sql")), *sorted(CONTROL_MIGRATIONS.glob("*.sql"))]:
             c.execute(_up_sql(f))

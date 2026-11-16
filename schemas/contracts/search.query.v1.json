@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cove.invalid/contracts/search.query.v1.json",
+  "title": "search.query v1",
+  "description": "Full-text search within one service. score is provider-relative (0..1 best effort).",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^cove:[a-z][a-z0-9_]*/[a-z_]+/[A-Za-z0-9._:-]+$"
+    }
+  },
+  "input": {
+    "type": "object",
+    "required": [
+      "q"
+    ],
+    "properties": {
+      "q": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      }
+    }
+  },
+  "output": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": [
+        "ref",
+        "service",
+        "title",
+        "excerpt",
+        "score",
+        "occurred_at"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "service": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "excerpt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "score": {
+          "type": "number"
+        },
+        "occurred_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

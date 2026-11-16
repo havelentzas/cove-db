@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cove.invalid/contracts/activity.last_contact.v1.json",
+  "title": "activity.last_contact v1",
+  "description": "When the user last heard from and wrote to each person. Refs with no activity are left out.",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^cove:[a-z][a-z0-9_]*/[a-z_]+/[A-Za-z0-9._:-]+$"
+    }
+  },
+  "input": {
+    "type": "object",
+    "required": [
+      "refs"
+    ],
+    "properties": {
+      "refs": {
+        "type": "array",
+        "maxItems": 1000,
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "output": {
+    "type": "object",
+    "additionalProperties": {
+      "type": "object",
+      "required": [
+        "last_inbound",
+        "last_outbound",
+        "channel"
+      ],
+      "properties": {
+        "last_inbound": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "last_outbound": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "channel": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

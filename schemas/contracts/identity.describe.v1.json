@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cove.invalid/contracts/identity.describe.v1.json",
+  "title": "identity.describe v1",
+  "description": "Describe refs the provider owns; refs it doesn't know are left out. aliases (optional) are other names the thing goes by.",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^cove:[a-z][a-z0-9_]*/[a-z_]+/[A-Za-z0-9._:-]+$"
+    }
+  },
+  "input": {
+    "type": "object",
+    "required": [
+      "refs"
+    ],
+    "properties": {
+      "refs": {
+        "type": "array",
+        "maxItems": 500,
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "output": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "required": [
+        "ref",
+        "label",
+        "kind",
+        "url",
+        "summary"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "label": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

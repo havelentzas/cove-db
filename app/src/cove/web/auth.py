@@ -2,7 +2,9 @@
 
 Access is **deny by default**: `middleware` requires a valid session for every path except the few in
 PUBLIC_PATHS / PUBLIC_PREFIXES (assets, health check, the sign-in flow itself). The notes sync API
-(TOKEN_PREFIXES) needs a device token instead. New routes are therefore protected without anyone
+(TOKEN_PREFIXES) needs a device token instead. The JSON API under API_PREFIX takes a personal access token
+(`cove_pat_`, or an ingest token `cove_ing_` on INGEST_PREFIX only) or a signed-in session; it answers
+401/403 with the JSON error envelope instead of redirecting. New routes are therefore protected without anyone
 remembering to add a dependency; tests/test_auth.py checks every route.
 
 Every request then runs as a `cove.context.Principal` bound to exactly one workspace: the device token's
@@ -31,6 +33,8 @@ from cove.control import identity, workspaces
 PUBLIC_PATHS = {"/healthz", "/login", "/auth/start", "/auth/callback"}
 PUBLIC_PREFIXES = ("/static/", "/brand/")
 TOKEN_PREFIXES = ("/api/notes/",)                       # bearer device tokens, not sessions
+API_PREFIX = "/api/v1/"                                  # personal tokens or a session (docs/fabric.md)
+INGEST_PREFIX = "/api/v1/messages/ingest/"              # the only place ingest tokens work
 NO_WORKSPACE_OK = ("/account", "/admin", "/auth/logout")  # reachable before you have a workspace
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -83,8 +87,15 @@ async def middleware(request: Request, call_next):
                                               user_id=dev["user_id"], role=dev["role"], scopes=dev["effective"]))
         return await call_next(request)
 
+    api = path.startswith(API_PREFIX)
+    if api and request.headers.get("authorization"):
+        return await _api_token(request, call_next, path)
+
     token = request.cookies.get(sessions.COOKIE)
     session = await run_in_threadpool(sessions.lookup, token) if token else None
+    if session is None and api:
+        return api_error("unauthorized", "sign in, or send Authorization: Bearer cove_pat_…", 401,
+                         {"WWW-Authenticate": "Bearer"})
     if session is None:
         htmx = bool(request.headers.get("hx-request"))
         if request.method in ("GET", "HEAD") and not htmx:
@@ -111,9 +122,13 @@ async def middleware(request: Request, call_next):
             await run_in_threadpool(identity.event, "csrf_rejected", user_id=session["id"],
                                     session_id=session["session_id"], ip=client_ip(request),
                                     user_agent=request.headers.get("user-agent"), path=path)
+            if api:
+                return api_error("csrf", "send the X-CSRF-Token header with session-authenticated writes", 403)
             return PlainTextResponse("This form expired. Go back, reload the page and try again.", status_code=403)
 
     if ws is None:
+        if api:
+            return api_error("no_workspace", "you're not a member of any workspace yet", 403)
         if not path.startswith(NO_WORKSPACE_OK):
             return _pages().TemplateResponse(request, "no_workspace.html", {}, status_code=403)
         return await call_next(request)
@@ -121,6 +136,28 @@ async def middleware(request: Request, call_next):
     context.set_current(context.Principal(actor=f"web:{session['username']}", workspace=workspaces.as_context(ws),
                                           user_id=session["id"], role=ws["role"],
                                           scopes=policy.effective(ws["role"], None)))
+    return await call_next(request)
+
+
+def api_error(code: str, message: str, status: int, headers: dict | None = None) -> JSONResponse:
+    """The /api/v1 error envelope."""
+    return JSONResponse({"error": {"code": code, "message": message}}, status_code=status, headers=headers)
+
+
+async def _api_token(request: Request, call_next, path: str):
+    """Bearer auth for /api/v1: personal tokens anywhere, ingest tokens only on the ingest routes."""
+    auth = request.headers.get("authorization", "")
+    raw = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+    tok = await run_in_threadpool(tokens.verify, raw) if raw else None
+    if not tok or tok["kind"] not in ("personal", "ingest"):
+        return api_error("unauthorized", "missing or invalid token (Authorization: Bearer cove_pat_…)", 401,
+                         {"WWW-Authenticate": "Bearer"})
+    if tok["kind"] == "ingest" and not path.startswith(INGEST_PREFIX):
+        return api_error("forbidden", "an ingest token can only send messages, not read anything", 403)
+    request.state.token = tok
+    context.set_current(context.Principal(actor=f"api:{tok['name']}", workspace=tok["workspace"],
+                                          user_id=tok["user_id"], role=tok["role"], scopes=tok["effective"],
+                                          agent=tok["kind"] == "personal"))
     return await call_next(request)
 
 

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Services{% endblock %}
+{% block nav %}<a href="/">Services</a><a href="/settings/services" aria-current="page">On &amp; off</a><a href="/settings/agents">Agents</a><a href="/settings/devices">Devices</a>{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}<a href="/api/v1/fabric/capabilities" class="muted" style="text-decoration:none">{{ icon('download') }} Capabilities (JSON)</a>{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">cove · {{ request.state.workspace.name }} · services</div>
+  <h1>Services</h1>
+  <p class="lede">Each service stands on its own and borrows from the others when it can. Turn one off and the rest carry on without it. Nothing is deleted.</p>
+</div></div>
+<div class="list svc-list">
+{% for r in rows %}
+  <section class="card svc-row" data-service="{{ r.key }}">
+    <div class="row" style="align-items:center">
+      <div class="grow">
+        <h2 style="margin:0">{{ MARK|safe }} {{ r.brand.name }}</h2>
+        <div class="eyebrow" style="margin-top:6px">{{ r.state|replace('_', ' ') }} · v{{ r.installed_version }}</div>
+      </div>
+      {% if owner and r.state != 'not_installed' %}
+      <form method="post" action="/settings/services/{{ r.key }}" {% if r.enabled %}data-confirm="Turn {{ r.brand.name }} off? Its pages, agent tools and links from other services disappear until you turn it back on. Nothing is deleted."{% endif %}>{{ csrf_field() }}
+        <input type="hidden" name="enabled" value="{{ 'false' if r.enabled else 'true' }}">
+        <button class="{{ 'secondary' if r.enabled else '' }}" type="submit">{{ 'Turn off' if r.enabled else 'Turn on' }}</button>
+      </form>
+      {% elif r.state != 'not_installed' %}<span class="chip">{{ 'on' if r.enabled else 'off' }}</span>{% endif %}
+    </div>
+    {% if r.fabric.provides %}
+    <div class="caps">
+      <span class="eyebrow">Shares</span>
+      {% for c in r.fabric.provides %}<span class="chip {{ 'accent' if c.available }}" title="{{ c.description }}{% if c.scope %} · needs {{ c.scope }}{% endif %}">{{ c.capability }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% if r.fabric.consumes %}
+    <div class="caps"><span class="eyebrow">Uses, if there</span>{% for c in r.fabric.consumes %}<span class="chip">{{ c }}</span>{% endfor %}</div>
+    {% endif %}
+  </section>
+{% endfor %}
+</div>
+{% if cursors %}
+<section class="card flat tight">
+  <div class="eyebrow" style="margin-bottom:var(--s3)">Background sync</div>
+  <ul class="list xs muted">
+  {% for c in cursors %}<li style="padding:3px 0;border:0"><span class="mono">{{ c.consumer }}</span> · up to event {{ c.last_seq }} · {{ c.updated_at|dt }}{% if c.last_error %} · <strong style="color:var(--danger)">retrying ({{ c.last_error }})</strong>{% endif %}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

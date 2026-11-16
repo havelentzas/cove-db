@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Turned off{% endblock %}
+{% block nav %}<a href="/">Services</a>{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}{% endblock %}
+{% block body %}
+<div class="empty">
+  <div class="display">{{ off.key|title }} is {{ 'turned off' if off.state == 'disabled' else 'not installed' }} here</div>
+  <p class="small">Its data is safe. {% if off.state == 'disabled' %}The workspace owner can turn it back on under <a href="/settings/services">Services</a>.{% endif %}</p>
+  <a class="btn secondary" href="/">{{ icon('arrow-left') }}All services</a>
+</div>
+{% endblock %}
