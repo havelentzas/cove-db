@@ -25,6 +25,10 @@ Please **don't open a public issue.** Use GitHub's private vulnerability reporti
   - deletes are tombstones
 - **Content safety:** rendered notes are sanitised with nh3. Attachments are served with a sandboxing CSP,
   and active types (HTML, SVG) are served as downloads.
+- **Backups:** nightly, encrypted with age to a key kept off the server, checked by a restore drill
+  every night, and copied off-site with restic. See `docs/backups.md`.
+- **Supply chain:** locked dependencies, images pinned by digest, and CI that runs pip-audit, npm audit,
+  gitleaks and Trivy (fixable HIGH/CRITICAL issues fail the build).
 - **Database:** separate roles for owner (migrations), app (read/write) and read-only (ad-hoc SQL with a
   5-second timeout).
 
@@ -33,6 +37,5 @@ A security overhaul is underway:
 - passkey sign-in through a self-hosted OIDC provider
 - a separate database per workspace
 - scoped tokens and OAuth 2.1 for MCP
-- container hardening, pinned dependencies, CI security scanning, and encrypted off-site backups
 
 Until that's complete, cove must **not** be exposed to the public internet.

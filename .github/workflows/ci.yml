@@ -11,9 +11,16 @@ jobs:
       - name: Create throwaway secrets
         run: sh scripts/init-secrets.sh && cp .env.example .env
       - name: Build
-        run: docker compose build web
+        run: docker compose build web backup
       - name: Server tests
         run: docker compose --profile test run --rm test
+      - name: Encrypted backup round trip (dump, restore drill, encrypt, decrypt + restore)
+        run: |
+          sh scripts/init-backup-key.sh "$RUNNER_TEMP/backup-key.txt"
+          docker compose run --rm -e BACKUP_ONCE=1 backup
+          grep -q '^ok .*drill=exact' backups/STATUS
+          ! ls backups/*.dump 2>/dev/null   # no plaintext dumps on disk
+          sh scripts/restore.sh db "$RUNNER_TEMP/backup-key.txt"
       - name: Obsidian plugin integration tests
         run: |
           docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/obsidian-plugin":/work -w /work node:22-alpine npm ci
@@ -30,4 +37,24 @@ jobs:
         working-directory: obsidian-plugin
         run: npm ci && npm audit --audit-level=high
       - name: gitleaks (secret scan)
-        run: docker run --rm -v "$PWD":/repo zricethezav/gitleaks:latest detect --source /repo --no-banner
+        run: docker run --rm -v "$PWD":/repo zricethezav/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854 detect --source /repo --no-banner
+  images:
+    # Trivy: fail on fixable HIGH/CRITICAL issues in the images we build. restic is an upstream binary
+    # (its Go dependencies are fixed by upstream releases, which Dependabot proposes), so it's reported only.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TRIVY: >-
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+        aquasec/trivy:0.67.2@sha256:e2b22eac59c02003d8749f5b8d9bd073b62e30fefaef5b7c8371204e0a4b0c08
+        image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: sh scripts/init-secrets.sh && cp .env.example .env && docker compose build web backup
+      - name: Scan cove-app
+        run: $TRIVY --exit-code 1 cove-app:latest
+      - name: Scan cove-backup (excluding the restic binary)
+        run: $TRIVY --exit-code 1 --skip-files usr/local/bin/restic cove-backup:latest
+      - name: Report restic (not blocking)
+        run: $TRIVY --exit-code 0 cove-backup:latest

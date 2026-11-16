@@ -12,7 +12,8 @@ so Google Contacts, iOS and other address books still work with it.
 postgres (pgvector/pg17) ── migrate (dbmate)
    ├── web  :8080  FastAPI + HTMX ──┐
    ├── mcp  :8765  MCP (HTTP)  ─────┤── both use cove.crm.service (validation, versioning, audit log)
-   └── backup     nightly pg_dump → ./backups
+   ├── backup     nightly encrypted pg_dump + restore drill → ./backups
+   └── offsite    (optional) restic copy of ./backups off-site
 ```
 
 ## Setup

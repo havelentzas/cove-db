@@ -3,3 +3,5 @@ backups
 .env
 .git
 **/__pycache__
+secrets
+CLAUDE.local.md

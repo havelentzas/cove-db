@@ -93,27 +93,53 @@ services:
       web:
         condition: service_started   # ensures the shared image is built first
 
+  # Nightly encrypted backup + restore drill (db/backup.sh, docs/backups.md). No internet access.
   backup:
     <<: *hardened
-    image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+    image: cove-backup:latest
+    build:
+      context: .
+      dockerfile: infra/backup/Dockerfile
     user: "${COVE_BACKUP_UID:-1000}:${COVE_BACKUP_GID:-1000}"   # backup files belong to you, not root
     read_only: true
-    mem_limit: 512m
+    tmpfs: ["/tmp:size=1g,mode=1777"]   # the plaintext dump only ever exists here, in memory
+    mem_limit: 1536m
     environment:
       PGHOST: postgres
       PGUSER: cove_owner
       PGDATABASE: cove
       BACKUP_RETENTION_DAYS: "14"
+      BACKUP_AGE_RECIPIENTS: ${COVE_BACKUP_AGE_RECIPIENTS:-}
     secrets: [postgres_password]
     volumes:
       - ./backups:/backups
-      - ./db/backup.sh:/backup.sh:ro
       - notes_blobs:/blobs:ro
     networks: [db]
-    entrypoint: ["sh", "/backup.sh"]
+    entrypoint: ["sh", "/usr/local/lib/cove/backup.sh"]
     depends_on:
       postgres:
         condition: service_healthy
+
+  # Off-site copy of ./backups with restic (db/offsite.sh). Internet access, no database access.
+  # Enable with COMPOSE_PROFILES=offsite in .env once COVE_OFFSITE_REPOSITORY is set.
+  offsite:
+    <<: *hardened
+    image: cove-backup:latest
+    profiles: ["offsite"]
+    user: "${COVE_BACKUP_UID:-1000}:${COVE_BACKUP_GID:-1000}"
+    read_only: true
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    mem_limit: 1g
+    environment:
+      RESTIC_REPOSITORY: ${COVE_OFFSITE_REPOSITORY:-}
+    secrets: [restic_password, offsite_env]
+    volumes:
+      - ./backups:/backups:ro
+    networks: [edge]
+    entrypoint: ["sh", "/usr/local/lib/cove/offsite.sh"]
+    depends_on:
+      backup:
+        condition: service_started   # ensures the shared image is built first
 
   # Test runner: docker compose --profile test run --rm test
   test:
@@ -137,6 +163,8 @@ secrets:
   readonly_password: { file: ./secrets/readonly_password.txt }
   token_pepper:      { file: ./secrets/token_pepper.txt }
   session_key:       { file: ./secrets/session_key.txt }
+  restic_password:   { file: ./secrets/restic_password.txt }
+  offsite_env:       { file: ./secrets/offsite_env.txt }   # provider credentials, KEY=value lines (may be empty)
 
 networks:
   db:

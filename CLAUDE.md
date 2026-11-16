@@ -21,7 +21,8 @@ public: never commit hostnames, emails, tokens or personal data. See `SECURITY.m
 | migrate  | dbmate, runs `db/migrations/*.sql` then exits | — |
 | web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` (hostname: see `CLAUDE.local.md`) |
 | mcp      | MCP SDK 2.x `MCPServer`, streamable HTTP (`cove.mcp_server`) | http://127.0.0.1:8765/mcp, and on the tailnet at `https://<host>:8443/mcp` (host allow-list: `COVE_MCP_EXTRA_HOSTS`) |
-| backup   | nightly `pg_dump -Fc` → `./backups`, 14-day retention | — |
+| backup   | nightly encrypted (age) dump + attachments → `./backups`, restore drill, 14-day retention (`docs/backups.md`) | — |
+| offsite  | profile `offsite`: restic copy of `./backups` off-site (30 daily / 12 monthly) | — |
 
 `web` and `mcp` are the same image (`app/Dockerfile`, build context = repo root).
 The user isn't in the `docker` group in older shells; use `sudo docker compose …` if `docker` is denied.
@@ -84,3 +85,4 @@ read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` h
   if records are document-shaped — a JSON Schema in `schemas/` and a form template in `templates/`.
   Give it a service key + colour pair in `brand/services.json` and follow `brand/BRAND.md` › Building a new service.
 - Never commit `.env`, `backups/`, or `*.vcf` (contact data).
+- Backups: `docs/backups.md`. The age private key is NOT on this machine; `backups/` only ever holds `*.age` files.

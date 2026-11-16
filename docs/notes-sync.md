@@ -92,4 +92,4 @@ because the ledger hash is updated *before* writing. Renames and trash moves are
 ## Server behaviour worth knowing
 - Links are resolved the way Obsidian does: exact path first, then file name (case-insensitive, `.md` optional, shortest path wins). Backlinks therefore work even for notes created after the link.
 - Every write is kept in `notes.versions`, the source for merges and history. There's no pruning yet.
-- Attachments live on the `notes_blobs` volume, under `/data/blobs/aa/bb/<sha256>`. The nightly backup copies new blobs to `./backups/blobs/`.
+- Attachments live on the `notes_blobs` volume, under `/data/blobs/aa/bb/<sha256>`. The nightly backup encrypts new blobs into `./backups/blobs/` (see `docs/backups.md`).
