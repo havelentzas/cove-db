@@ -34,6 +34,12 @@ Don't confuse the two kinds of "notes": `read_notes`/`write_note` are YOUR durab
 Edits to the vault sync to the user's Obsidian devices, so keep their formatting and never rewrite a note
 wholesale when an append will do.
 
+Before you discuss, message or meet someone, call `context_for` with their name: it brings back what the
+user's services know about them (logged conversations, notes that mention them, and messages where those are
+available) in one call. Its `coverage` lists services it couldn't include and why (turned off, no
+permission, error); say so instead of treating a missing part as "nothing there". `search_everything`
+searches every service at once the same way.
+
 Start a session with `describe_system` (domains, tables, counts) and `read_notes` (durable notes left by
 earlier agents about the user's preferences and conventions). When you learn something worth remembering
 across sessions, save it with `write_note`.
@@ -53,6 +59,7 @@ WRITE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint
 # every registered tool.
 TOOL_SCOPES: dict[str, str | None] = {
     "describe_system": None,
+    "context_for": None, "search_everything": None,   # each part checks its own scope (cove.fabric)
     "read_notes": "system:memory", "write_note": "system:memory",
     "sql_query": "system:sql",
     **{t: "people:read" for t in ("search_contacts", "get_contact", "list_interactions", "follow_ups_due",
@@ -153,6 +160,40 @@ async def sql_query(sql: str, max_rows: int = 200) -> dict:
         raise
     except Exception as e:  # SQL errors are useful feedback for the agent
         raise ToolError(f"SQL error: {e}") from None
+
+
+def untrusted(value: Any) -> dict | None:
+    """Text written by people or other programs, marked so it is read as data, never as instructions."""
+    return None if value in (None, "") else {"untrusted_text": value}
+
+
+def _wrap(items: list[dict], *fields: str) -> list[dict]:
+    return [{**i, **{f: untrusted(i.get(f)) for f in fields if f in i}} for i in items]
+
+
+@mcp.tool(annotations=READ, meta={"service": "core"})
+async def context_for(ref_or_name: str, since: str | None = None, limit: int = 50) -> dict:
+    """Call this before discussing, messaging or meeting a person: everything the user's services know about
+    them in one call (who they are, when you last talked, threads awaiting a reply, and a merged timeline of
+    logged conversations, notes mentioning them and message activity). Pass a name, phone number, email or a
+    cove ref (e.g. from search_contacts). since: ISO date to limit the timeline. If several people match you
+    get `candidates` instead; call again with one's ref. `coverage.missing` lists services that couldn't be
+    included (turned off, no permission, error): mention it rather than assuming there's nothing."""
+    from cove.fabric import aggregate
+    out = await _call(aggregate.context_for, ref_or_name, since, None, limit)
+    out["timeline"] = _wrap(out["timeline"], "title", "excerpt")
+    out["awaiting_reply"] = _wrap(out["awaiting_reply"], "title")
+    return out
+
+
+@mcp.tool(annotations=READ, meta={"service": "core"})
+async def search_everything(query: str, limit: int = 20) -> dict:
+    """Search every service at once (contacts, conversations, notes, messages where available). Each hit has a
+    `ref` and its `service`. `coverage.missing` lists services that couldn't be searched and why."""
+    from cove.fabric import aggregate
+    out = await _call(aggregate.search_everything, query, limit)
+    out["hits"] = _wrap(out["hits"], "title", "excerpt")
+    return out
 
 
 # ============================================================== contacts

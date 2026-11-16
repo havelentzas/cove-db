@@ -16,8 +16,10 @@ PUBLIC = "https://cove.test"
 
 # ------------------------------------------------------------------ coverage: nothing left unguarded
 def test_every_service_function_is_guarded():
+    from cove.crm import fabric as people_fabric
     from cove.fabric import aggregate, core, events, services
-    for module in (svc, notes, core, services, events, aggregate):
+    from cove.notes import fabric as notes_fabric
+    for module in (svc, notes, core, services, events, aggregate, people_fabric, notes_fabric):
         assert policy.unguarded(module) == [], module.__name__
 
 

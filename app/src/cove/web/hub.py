@@ -14,14 +14,18 @@ import os
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from cove import brand
+from cove.auth import policy
+
+from cove import brand, fabric
 from cove.crm import service as svc
 
 router = APIRouter(tags=["core"])
+# Extra home-page numbers per service: key -> function returning [(number, label)]. Services add themselves.
+STATS: dict = {}
 
 CORE = {"key": "", "name": "cove", "status": "live", "path": "/",
         "blurb": "System tools shared by every service: orientation, agent memory and read-only SQL."}
-CORE_TOOLS = {"describe_system", "read_notes", "write_note", "sql_query"}
+CORE_TOOLS = {"describe_system", "read_notes", "write_note", "sql_query", "context_for", "search_everything"}
 
 
 def mcp_urls() -> list[str]:
@@ -72,27 +76,54 @@ def _routes(request: Request) -> list[dict]:
     return sorted(out, key=lambda x: (x["path"], x["methods"]))
 
 
+def _integration() -> dict[str, dict]:
+    """Per service: its state in this workspace and what it shares and uses through the fabric."""
+    try:
+        return {s["service"]: s for s in fabric.describe()}
+    except Exception:   # noqa: BLE001 - the catalog must render even if the fabric can't be asked
+        return {}
+
+
 async def catalog(request: Request) -> dict:
     tools, routes = await _mcp_tools(), _routes(request)
+    integ = await __import__("anyio").to_thread.run_sync(_integration)
     services = []
     for s in [CORE, *brand.registry()["services"]]:
         key = s["key"] or "core"
-        services.append({**s, "id": key,
+        f = integ.get(key, {})
+        status = s["status"]
+        if status == "live" and f.get("state") in ("disabled", "not_installed"):
+            status = "off"
+        services.append({**s, "id": key, "status": status,
+                         "integration": {"state": f.get("state", "live" if not s["key"] else "not_installed"),
+                                         "provides": f.get("provides", []), "consumes": f.get("consumes", []),
+                                         "publishes": f.get("publishes", [])},
                          "mcp_tools": [t for t in tools if t["service"] == key],
                          "web_routes": [r for r in routes if r["service"] == key]})
-    return {"mcp": {"transport": "streamable-http", "urls": mcp_urls()}, "services": services}
+    return {"mcp": {"transport": "streamable-http", "urls": mcp_urls()}, "api": "/api/v1/openapi.json",
+            "services": services}
 
 
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     from cove.web.app import pages  # shared Jinja environment
     cat = await catalog(request)
-    counts = svc.describe_system()["counts"]
-    from cove.notes import service as notes
-    ns = notes.stats()
-    stats = {"people": [(counts["active_contacts"], "people"), (counts["follow_ups_due"], "to reach out"),
-                        (counts["interactions"], "conversations")],
-             "notes": [(ns["notes"], "notes"), (ns["attachments"], "attachments"), (ns["devices"], "devices")]}
+    live = {s["key"] for s in cat["services"] if s["status"] == "live"}
+    stats = {}
+    if "people" in live:
+        counts = svc.describe_system()["counts"]
+        stats["people"] = [(counts["active_contacts"], "people"), (counts["follow_ups_due"], "to reach out"),
+                           (counts["interactions"], "conversations")]
+    if "notes" in live and policy.allows("notes:read"):
+        from cove.notes import service as notes
+        ns = notes.stats()
+        stats["notes"] = [(ns["notes"], "notes"), (ns["attachments"], "attachments"), (ns["devices"], "devices")]
+    for key, fn in STATS.items():
+        if key in live:
+            try:
+                stats[key] = fn()
+            except Exception:   # noqa: BLE001 - a service's numbers are a nicety, never a reason to fail
+                pass
     return pages.TemplateResponse(request, "hub.html", {"cat": cat, "stats": stats, "svc": CORE})
 
 

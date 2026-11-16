@@ -7,14 +7,12 @@ scopes, exactly as for the web UI and MCP. Every object carries its `ref`; error
 
 from __future__ import annotations
 
-import base64
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.openapi.utils import get_openapi
 
-from cove import fabric
+from cove import cursors, fabric
 from cove.crm.service import Invalid
 from cove.fabric import aggregate
 from cove.fabric import events as fabric_events
@@ -40,20 +38,7 @@ def service_on(key: str):
     return Depends(check)
 
 
-def encode_cursor(*values: Any) -> str:
-    return base64.urlsafe_b64encode(json.dumps(values, default=str).encode()).decode().rstrip("=")
-
-
-def decode_cursor(cursor: str | None, n: int) -> list | None:
-    if not cursor:
-        return None
-    try:
-        values = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
-    except ValueError:
-        raise Invalid("bad cursor") from None
-    if not isinstance(values, list) or len(values) != n:
-        raise Invalid("bad cursor")
-    return values
+encode_cursor, decode_cursor = cursors.encode, cursors.decode
 
 
 def page(items: list[dict], limit: int, key) -> dict:
@@ -112,3 +97,81 @@ def openapi(request: Request) -> dict:
         "bearer": {"type": "http", "scheme": "bearer", "description": "cove_pat_… personal access token"}}}
     doc["security"] = [{"bearer": []}]
     return doc
+
+
+# ---------------------------------------------------------------- People
+people_router = APIRouter(prefix=f"{PREFIX}/people", tags=["people"], dependencies=[service_on("people")])
+
+
+def _contact(row: dict) -> dict:
+    return {"ref": fabric.ref("people", "contact", row["id"]), **row}
+
+
+@people_router.get("/contacts")
+def list_contacts(q: str | None = None, tag: str | None = None, since: str | None = None,
+                  cursor: str | None = None, limit: int = Query(100, ge=1, le=500),
+                  include_archived: bool = False) -> dict:
+    """Contacts. `q`/`tag` search (one page, best matches first); `since` is a change feed (updated at or
+    after, oldest first, archived included); otherwise alphabetical. Page with `cursor`."""
+    from cove.crm import service as svc
+    if q or tag:
+        return {"items": [_contact(r) for r in svc.search_contacts(q, tag, False, include_archived, limit)],
+                "next_cursor": None}
+    res = svc.list_contacts(since, cursor, limit, include_archived)
+    return {"items": [_contact(r) for r in res["items"]], "next_cursor": res["next_cursor"]}
+
+
+@people_router.get("/contacts/{contact_id}")
+def get_contact(contact_id: str, interactions: int = Query(10, ge=0, le=200)) -> dict:
+    """One contact: JSContact card, version, circles, relationships, recent conversations, rhythm."""
+    from cove.crm import service as svc
+    return _contact(svc.get_contact(contact_id, interactions=interactions))
+
+
+@people_router.get("/interactions")
+def list_interactions(contact: str | None = None, since: str | None = None, until: str | None = None,
+                      cursor: str | None = None, limit: int = Query(50, ge=1, le=200)) -> dict:
+    """Logged conversations, newest first, optionally for one contact."""
+    from cove.crm import fabric as people
+    subject = fabric.ref("people", "contact", contact) if contact else None
+    from cove.auth import policy
+    policy.require("people:read")
+    return people.timeline(subject, since, until, limit, cursor)
+
+
+@people_router.get("/follow-ups")
+def follow_ups(limit: int = Query(50, ge=1, le=500)) -> dict:
+    """Who you're due to reach out to, most overdue first."""
+    from cove.crm import service as svc
+    return {"items": [_contact(r) for r in svc.follow_ups_due(limit)], "next_cursor": None}
+
+
+# ---------------------------------------------------------------- Notes
+notes_router = APIRouter(prefix=f"{PREFIX}/notes", tags=["notes"], dependencies=[service_on("notes")])
+
+
+def _file(row: dict) -> dict:
+    return {"ref": fabric.ref("notes", "file", row["id"]), **row}
+
+
+@notes_router.get("/files")
+def list_files(q: str | None = None, tag: str | None = None, folder: str | None = None,
+               since: int | None = Query(None, ge=0), cursor: str | None = None,
+               limit: int = Query(100, ge=1, le=500)) -> dict:
+    """Notes. `since` is the sync change feed (a `seq`, tombstones included); otherwise search by `q`, `tag`
+    or `folder`, newest first."""
+    from cove.notes import service as notes
+    if since is not None or cursor:
+        start = int(decode_cursor(cursor, 1)[0]) if cursor else since
+        res = notes.changes(start, limit)
+        return {"items": [_file(r) for r in res["changes"]],
+                "next_cursor": encode_cursor(res["last_seq"]) if res["more"] else None, "head_seq": res["head_seq"]}
+    return {"items": [_file(r) for r in notes.search(q, tag, folder, limit)], "next_cursor": None}
+
+
+@notes_router.get("/files/{file_id}")
+def get_file(file_id: str) -> dict:
+    """One note by id, with its Markdown `content`, backlinks and version."""
+    from cove.notes import service as notes
+    f = notes.get(file_id)
+    return _file({**f, "backlinks": notes.backlinks(f["id"])})

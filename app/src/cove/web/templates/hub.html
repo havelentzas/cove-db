@@ -2,7 +2,8 @@
 {% block title %}Home{% endblock %}
 {% block nav %}
   <a href="/" aria-current="page">Services</a>
-  {% for s in SERVICES if s.status == 'live' %}<a href="{{ s.path }}">{{ s.name }}</a>{% endfor %}
+  {% for s in cat.services if s.key and s.status == 'live' %}<a href="{{ s.path }}">{{ s.name }}</a>{% endfor %}
+  <a href="/settings/services">On &amp; off</a>
 {% endblock %}
 {% block header_action %}<button class="secondary" type="button" data-open="info-core">{{ icon('link') }}Connect an agent</button>{% endblock %}
 {% block footer_action %}<a href="/api/services" class="muted" style="text-decoration:none">{{ icon('download') }} Catalog (JSON)</a>{% endblock %}
@@ -19,6 +20,13 @@
     <form method="dialog"><button class="ghost" aria-label="Close">Close</button></form>
   </div>
   <div class="sheet-body">
+    {% if s.integration and s.integration.provides %}
+      <h3>Shares with other services</h3>
+      {% for c in s.integration.provides %}
+      <div class="endpoint"><span class="method read">cap</span><span class="sig">{{ c.capability }}</span>
+        <span class="desc">{{ c.description }}{% if c.scope %} <span class="chip">{{ c.scope }}</span>{% endif %}{% if not c.available %} <span class="chip">not available to you</span>{% endif %}</span></div>
+      {% endfor %}
+    {% endif %}
     {% if s.mcp_tools or s.web_routes %}
       <h3>MCP server</h3>
       {% for u in cat.mcp.urls %}
@@ -44,7 +52,7 @@
         <span class="desc">{{ r.name }}</span>
       </div>
       {% else %}<p class="small muted">No web routes.</p>{% endfor %}
-      {% if not s.key %}<p class="xs muted" style="margin-top:var(--s4)">Web routes are browser pages and form posts, not a JSON API. <code>/api/services</code> is the machine-readable catalog.</p>{% endif %}
+      {% if not s.key %}<p class="xs muted" style="margin-top:var(--s4)">Routes under <code>/api/v1/</code> are the JSON API (personal token or session; <a href="/api/v1/openapi.json">OpenAPI</a>). The rest are browser pages and form posts. <code>/api/services</code> is the machine-readable catalog.</p>{% endif %}
     {% else %}
       <div class="empty" style="padding:var(--s5) 0">
         <div class="display">Not built yet</div>
@@ -73,12 +81,18 @@
         {% if s.status == 'live' %}<a class="name" href="{{ s.path }}">{{ s.name }}</a>{% else %}<span class="name">{{ s.name }}</span>{% endif %}
         <div class="eyebrow" style="margin-top:6px">{{ s.domain }}</div>
       </div>
-      {% if s.status == 'live' %}<span class="chip accent">live</span>{% else %}<span class="chip">coming</span>{% endif %}
+      {% if s.status == 'live' %}<span class="chip accent">live</span>{% elif s.status == 'off' %}<a class="chip" href="/settings/services" title="Turned off in this workspace">off</a>{% else %}<span class="chip">coming</span>{% endif %}
     </div>
     <p class="blurb">{{ s.blurb }}</p>
     {% if stats.get(s.key) %}
     <div class="stats">
       {% for n, label in stats[s.key] %}<div><div class="stat">{{ n }}</div><div class="eyebrow">{{ label }}</div></div>{% endfor %}
+    </div>
+    {% endif %}
+    {% if s.status == 'live' and (s.integration.provides or s.integration.consumes) %}
+    <div class="caps" title="What {{ s.name }} shares with your other services, and what it uses when they're there">
+      {% for c in s.integration.provides %}<span class="chip">{{ c.capability }}</span>{% endfor %}
+      {% for c in s.integration.consumes %}<span class="chip" style="background:transparent;border:1px dashed var(--line-strong)">uses {{ c }}</span>{% endfor %}
     </div>
     {% endif %}
     <div class="foot" {% if not stats.get(s.key) %}style="margin-top:auto"{% endif %}>

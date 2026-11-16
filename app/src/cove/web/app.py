@@ -458,6 +458,8 @@ app.include_router(notes_api.router)
 app.include_router(services_web.router)
 app.include_router(api_v1.fabric_router)
 app.include_router(api_v1.meta_router)
+app.include_router(api_v1.people_router)
+app.include_router(api_v1.notes_router)
 
 
 @app.get("/healthz")

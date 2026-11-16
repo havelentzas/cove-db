@@ -12,7 +12,7 @@ import copy
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -82,6 +82,32 @@ def merge_patch(target: Any, patch: Any) -> Any:
 def _diff(old: dict, new: dict) -> dict:
     keys = (set(old) | set(new)) - {"updated"}
     return {k: {"from": old.get(k), "to": new.get(k)} for k in sorted(keys) if old.get(k) != new.get(k)}
+
+
+def _event(c, type: str, contact_id: Any) -> None:
+    """Tell other services (through the fabric's outbox, in this transaction) that a contact changed."""
+    from cove import fabric
+    fabric.publish(c, "people", f"people.contact.{type}", fabric.ref("people", "contact", contact_id))
+
+
+def _message_activity(contact_ids: list) -> dict[str, dict] | None:
+    """Last message to/from each contact, from Messages through the fabric: {contact id: {last_inbound, …}}.
+
+    Optional: None when Messages is missing, turned off, failing or not readable by the caller, and then
+    People behaves exactly as it does on its own."""
+    if not contact_ids:
+        return {}
+    from cove import fabric
+    r = fabric.ask("activity.last_contact", provider="messages",
+                   refs=[fabric.ref("people", "contact", i) for i in contact_ids])
+    if not r.ok:
+        return None
+    return {fabric.parse_ref(k)[2]: v for k, v in (r.value or {}).items() if fabric.parse_ref(k)}
+
+
+def _latest(*values) -> datetime | None:
+    found = [v if isinstance(v, datetime) else _parse_dt(v) for v in values if v]
+    return max(found) if found else None
 
 
 def _audit(c, actor: str, entity: str, entity_id: Any, action: str, diff: Any = None) -> None:
@@ -194,6 +220,7 @@ def create_contact(card: dict, actor: str) -> dict:
             card = absorbed
             c.execute("UPDATE crm.contacts SET card=%s WHERE id=%s", (Jsonb(card), contact_id))
         _audit(c, actor, "crm.contact", contact_id, "create", {"card": card})
+        _event(c, "created", contact_id)
     return get_contact(contact_id)
 
 
@@ -219,11 +246,21 @@ def get_contact(contact_id: Any, *, interactions: int = 10) -> dict:
                  FROM crm.relationships r JOIN crm.contacts o ON o.id=r.from_id WHERE r.to_id=%s
                ORDER BY other_name""", (cid, cid)).fetchall()
         inter = _interactions(c, cid, interactions)
+    # With Messages around (and readable), a message you sent also counts as getting in touch.
+    msgs = _message_activity([cid])
+    activity = (msgs or {}).get(str(cid))
+    last = row["last_contacted"]
+    next_due = row["next_due"]
+    if activity:
+        last = _latest(row["last_contacted"], activity.get("last_outbound"))
+        if row["every_days"] and next_due is not None:
+            next_due = (last or row["created_at"]) + timedelta(days=row["every_days"])
     return _plain({
         "id": row["id"], "version": row["version"], "display_name": row["display_name"],
         "card": row["card"], "tags": tags, "relationships": rels, "recent_interactions": inter,
-        "last_contacted": row["last_contacted"],
-        "follow_up": ({"every_days": row["every_days"], "next_due": row["next_due"],
+        "last_contacted": last,
+        "messages": activity if msgs is not None else None,
+        "follow_up": ({"every_days": row["every_days"], "next_due": next_due,
                        "snoozed_until": row["snoozed_until"]} if row["every_days"] else None),
         "created_at": row["created_at"], "updated_at": row["updated_at"], "archived_at": row["archived_at"],
     })
@@ -244,6 +281,7 @@ def _save_card(cid: uuid.UUID, new_card_fn, expected_version: int, actor: str, a
         if diff:
             c.execute("UPDATE crm.contacts SET card=%s, version=version+1 WHERE id=%s", (Jsonb(new), cid))
             _audit(c, actor, "crm.contact", cid, action, diff)
+            _event(c, "updated", cid)
     return get_contact(cid)
 
 
@@ -266,6 +304,7 @@ def archive_contact(contact_id: Any, actor: str, archived: bool = True) -> dict:
         if not r:
             raise NotFound(f"no contact with id {cid}")
         _audit(c, actor, "crm.contact", cid, "archive" if archived else "unarchive")
+        _event(c, "archived" if archived else "updated", cid)
     return get_contact(cid)
 
 
@@ -303,6 +342,41 @@ def search_contacts(query: str | None = None, tag: str | None = None, due_only: 
     params.append(max(1, min(int(limit), 500)))
     with db.conn() as c:
         return _plain(c.execute(sql, params).fetchall())
+
+
+def list_contacts(since: Any = None, cursor: str | None = None, limit: int = 100,
+                  include_archived: bool = False) -> dict:
+    """Contacts page by page. With `since`, a change feed: contacts updated at or after it, oldest first;
+    otherwise alphabetical. Archived contacts are included in the change feed so clients see them go."""
+    from cove import cursors
+    limit = max(1, min(int(limit), 500))
+    where, params = [], []
+    if since:
+        where.append("c.updated_at >= %s")
+        params.append(_parse_dt(since))
+        order, key = "c.updated_at, c.id", ("c.updated_at", "timestamptz")
+    else:
+        order, key = "lower(c.display_name), c.id", ("lower(c.display_name)", "text")
+        if not include_archived:
+            where.append("c.archived_at IS NULL")
+    after = cursors.decode(cursor, 2)
+    if after:
+        where.append(f"({key[0]}, c.id) > (%s::{key[1]}, %s::uuid)")
+        params += after
+    with db.conn() as c:
+        rows = c.execute(f"""SELECT o.id, o.display_name, o.emails, o.phones, o.tags, o.last_contacted, o.next_due,
+                                    o.every_days, o.version, o.archived_at, c.updated_at,
+                                    lower(c.display_name) AS _sort
+                               FROM crm.contacts c JOIN crm.contact_overview o USING (id)
+                              {'WHERE ' + ' AND '.join(where) if where else ''}
+                              ORDER BY {order} LIMIT %s""", [*params, limit + 1]).fetchall()
+    more = len(rows) > limit
+    rows = rows[:limit]
+    last = rows[-1] if rows else None
+    nxt = None
+    if more and last:
+        nxt = cursors.encode(last["updated_at"].isoformat() if since else last["_sort"], str(last["id"]))
+    return _plain({"items": [{k: v for k, v in r.items() if k != "_sort"} for r in rows], "next_cursor": nxt})
 
 
 # ================================================================== interactions
@@ -401,10 +475,31 @@ def set_follow_up(contact_id: Any, every_days: int | None, actor: str, snoozed_u
 
 
 def follow_ups_due(limit: int = 50) -> list[dict]:
+    """Contacts due a nudge, most overdue first. With Messages present, a message you sent resets the clock."""
+    limit = max(1, min(int(limit), 500))
     with db.conn() as c:
-        return _plain(c.execute(
-            "SELECT id, display_name, tags, last_contacted, every_days, next_due FROM crm.follow_ups_due LIMIT %s",
-            (max(1, min(int(limit), 500)),)).fetchall())
+        ruled = c.execute("SELECT id FROM crm.contact_overview WHERE archived_at IS NULL AND next_due IS NOT NULL "
+                          "LIMIT 5000").fetchall()
+    msgs = _message_activity([r["id"] for r in ruled])
+    if not msgs:   # Messages absent, off, unreadable, or nothing to add: exactly the People-only answer
+        with db.conn() as c:
+            return _plain(c.execute(
+                "SELECT id, display_name, tags, last_contacted, every_days, next_due FROM crm.follow_ups_due LIMIT %s",
+                (limit,)).fetchall())
+    with db.conn() as c:
+        rows = c.execute("SELECT o.id, o.display_name, o.tags, o.last_contacted, o.every_days, o.snoozed_until, "
+                         "c.created_at FROM crm.contact_overview o JOIN crm.contacts c USING (id) "
+                         "WHERE o.archived_at IS NULL AND o.next_due IS NOT NULL").fetchall()
+    now = datetime.now(timezone.utc)
+    due = []
+    for r in rows:
+        last = _latest(r["last_contacted"], (msgs.get(str(r["id"])) or {}).get("last_outbound"))
+        next_due = (last or r["created_at"]) + timedelta(days=r["every_days"])
+        if next_due <= now and (r["snoozed_until"] is None or r["snoozed_until"] <= now):
+            due.append({"id": r["id"], "display_name": r["display_name"], "tags": r["tags"], "last_contacted": last,
+                        "every_days": r["every_days"], "next_due": next_due})
+    due.sort(key=lambda r: r["next_due"])
+    return _plain(due[:limit])
 
 
 # ================================================================== tags
@@ -599,11 +694,15 @@ def describe_system() -> dict:
         topics = c.execute("SELECT topic, count(*) AS notes, max(updated_at) AS last_updated FROM meta.agent_notes "
                            "GROUP BY topic ORDER BY topic").fetchall()
         changes = c.execute("SELECT migration, summary, applied_at FROM meta.changelog ORDER BY id DESC LIMIT 10").fetchall()
+    from cove import fabric
     return _plain({
         "system": "cove-db: personal life databases. Postgres + this MCP server + a web UI at http://127.0.0.1:8080.",
         "domains": domains, "tables": cols, "counts": counts, "agent_note_topics": topics,
         "recent_changes": changes,
-        "guidance": ["Use the domain tools for writes; sql_query is read-only.",
+        # which services are on here, what they share through the fabric, and what this caller may use
+        "services": fabric.describe(),
+        "guidance": ["Before discussing, messaging or meeting someone, call context_for(name) first: it "
+                     "gathers messages, logged conversations and notes, and says which services it couldn't reach.","Use the domain tools for writes; sql_query is read-only.",
                      "Contact edits need the current `version` (optimistic locking).",
                      "Record durable learnings about the user's preferences with write_note."],
     })
@@ -667,7 +766,7 @@ from cove.auth import policy as _policy  # noqa: E402
 _policy.guard(__name__, {
     _policy.PURE: ["validate_card", "merge_patch", "build_card"],
     None: ["describe_system"],
-    "people:read": ["get_contact", "search_contacts", "list_interactions", "follow_ups_due", "list_tags",
+    "people:read": ["get_contact", "search_contacts", "list_contacts", "list_interactions", "follow_ups_due", "list_tags",
                     "export_vcard", "preview_import", "audit_trail"],
     "people:write": ["create_contact", "update_contact", "replace_card", "archive_contact", "log_interaction",
                      "delete_interaction", "set_follow_up", "tag_contacts", "untag_contacts", "set_contact_tags",

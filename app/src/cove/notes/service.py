@@ -151,6 +151,8 @@ def _save(c, *, file_id: uuid.UUID, kind: str, path: str, body: str | None, blob
     if existing and existing["path"] != path:
         diff["from_path"] = existing["path"]
     _audit(c, actor, "notes.file", file_id, action, diff)
+    from cove import fabric
+    fabric.publish(c, "notes", "notes.file.changed", fabric.ref("notes", "file", file_id), {"deleted": deleted})
     return _meta(row)
 
 
