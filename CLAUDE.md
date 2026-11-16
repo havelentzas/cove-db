@@ -25,6 +25,8 @@ public: never commit hostnames, emails, tokens or personal data. See `SECURITY.m
 
 `web` and `mcp` are the same image (`app/Dockerfile`, build context = repo root).
 The user isn't in the `docker` group in older shells; use `sudo docker compose …` if `docker` is denied.
+Containers are hardened (caps dropped, no-new-privileges, read-only app FS, Postgres on an internal network);
+keep it that way when adding services: start from the `x-hardened` / `x-app` anchors in docker-compose.yml.
 
 ## Brand (applies to every service, now and later)
 `brand/` is the shared identity: `BRAND.md` (principles, colour, type, voice — read it before any UI
@@ -68,7 +70,9 @@ The home page (`web/hub.py`) builds its catalog from these, so nothing is hand-m
 
 ## Roles
 `cove_owner` (migrations, superuser) · `cove_app` (web+mcp; RW `crm.*`, `meta.agent_notes`; INSERT-only
-`meta.audit_log`) · `cove_readonly` (`sql_query` tool; read-only session, 5s timeout). Passwords in `.env`.
+`meta.audit_log`) · `cove_readonly` (`sql_query` tool; read-only session, 5s timeout).
+Secrets (DB passwords, token pepper, session key) are Docker secrets in `./secrets/*.txt` (git-ignored; dir 700),
+read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` holds only non-secret settings.
 
 ## Common tasks
 - Rebuild & restart: `docker compose up -d --build`

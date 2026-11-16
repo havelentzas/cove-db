@@ -5,7 +5,7 @@
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
-. ./.env
+POSTGRES_PASSWORD=$(cat ./secrets/postgres_password.txt)
 DOCKER=${DOCKER:-docker}
 OUT=$(mktemp -d)
 chmod 777 "$OUT"

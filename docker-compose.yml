@@ -1,23 +1,49 @@
 name: cove
 
-x-app-env: &app-env
-  COVE_TIMEZONE: ${COVE_TIMEZONE:-Europe/Amsterdam}
-  COVE_DATABASE_URL: postgresql://cove_app:${COVE_APP_PASSWORD}@postgres:5432/cove
-  COVE_READONLY_URL: postgresql://cove_readonly:${COVE_READONLY_PASSWORD}@postgres:5432/cove
+# Security baseline for every service (see SECURITY.md):
+#  - secrets come from ./secrets/*.txt as Docker secrets (/run/secrets/<name>), never env vars
+#  - images are pinned by digest; Linux capabilities dropped; no privilege escalation
+#  - Postgres lives on an internal network with no route to the internet
+
+x-hardened: &hardened
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 256
+
+x-app: &app
+  <<: *hardened
+  image: cove-app:latest
+  read_only: true
+  tmpfs: ["/tmp:size=256m"]
+  mem_limit: 768m
+  cpus: 2
+  environment: &app-env
+    COVE_TIMEZONE: ${COVE_TIMEZONE:-Europe/Amsterdam}
+  secrets: [app_password, readonly_password, token_pepper, session_key]
+  volumes:
+    - notes_blobs:/data/blobs
+  networks: [db, edge]
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
 
 services:
   postgres:
+    <<: *hardened
     image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
-    restart: unless-stopped
+    # the entrypoint fixes data-dir ownership as root, then drops to the postgres user
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    mem_limit: 1g
     environment:
       POSTGRES_USER: cove_owner
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: cove
-      COVE_APP_PASSWORD: ${COVE_APP_PASSWORD}
-      COVE_READONLY_PASSWORD: ${COVE_READONLY_PASSWORD}
+    secrets: [postgres_password, app_password, readonly_password]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [db]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cove_owner -d cove"]
       interval: 5s
@@ -26,41 +52,36 @@ services:
 
   migrate:
     image: amacneil/dbmate:2@sha256:b0c8a87bfef4f2819fdb0a68ca357a44d12fb90d23eca695fcfc3b7e159cb1c5
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
     environment:
-      DATABASE_URL: postgresql://cove_owner:${POSTGRES_PASSWORD}@postgres:5432/cove?sslmode=disable
       DBMATE_MIGRATIONS_DIR: /db/migrations
       DBMATE_NO_DUMP_SCHEMA: "true"
+    secrets: [postgres_password]
     volumes:
       - ./db:/db:ro
-    command: ["--wait", "up"]
+    networks: [db]
+    entrypoint: ["sh", "-c", 'DATABASE_URL="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432/cove?sslmode=disable" exec dbmate --wait up']
     depends_on:
       postgres:
         condition: service_healthy
 
   web:
+    <<: *app
     build:
       context: .
       dockerfile: app/Dockerfile
-    image: cove-app:latest
-    restart: unless-stopped
     environment:
       <<: *app-env
       COVE_MCP_URLS: ${COVE_MCP_URLS:-http://127.0.0.1:8765/mcp}
-    command: ["uvicorn", "cove.web.app:app", "--host", "0.0.0.0", "--port", "8080"]
-    volumes:
-      - notes_blobs:/data/blobs
+    command: ["uvicorn", "cove.web.app:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
     ports:
       - "127.0.0.1:8080:8080"
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
 
   mcp:
-    image: cove-app:latest
-    restart: unless-stopped
+    <<: *app
     command: ["python", "-m", "cove.mcp_server"]
-    volumes:
-      - notes_blobs:/data/blobs
     environment:
       <<: *app-env
       COVE_MCP_EXTRA_HOSTS: ${COVE_MCP_EXTRA_HOSTS:-}
@@ -73,18 +94,22 @@ services:
         condition: service_started   # ensures the shared image is built first
 
   backup:
+    <<: *hardened
     image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
-    restart: unless-stopped
+    user: "${COVE_BACKUP_UID:-1000}:${COVE_BACKUP_GID:-1000}"   # backup files belong to you, not root
+    read_only: true
+    mem_limit: 512m
     environment:
       PGHOST: postgres
       PGUSER: cove_owner
-      PGPASSWORD: ${POSTGRES_PASSWORD}
       PGDATABASE: cove
       BACKUP_RETENTION_DAYS: "14"
+    secrets: [postgres_password]
     volumes:
       - ./backups:/backups
       - ./db/backup.sh:/backup.sh:ro
       - notes_blobs:/blobs:ro
+    networks: [db]
     entrypoint: ["sh", "/backup.sh"]
     depends_on:
       postgres:
@@ -92,18 +117,31 @@ services:
 
   # Test runner: docker compose --profile test run --rm test
   test:
+    <<: *app
     profiles: ["test"]
-    image: cove-app:latest
-    environment:
-      COVE_TEST_DATABASE_URL: postgresql://cove_owner:${POSTGRES_PASSWORD}@postgres:5432/cove_test
+    restart: "no"
+    secrets: [postgres_password, app_password, readonly_password, token_pepper, session_key]
     volumes:
       - ./app/tests:/srv/app/tests:ro
       - ./db:/srv/db:ro
     working_dir: /srv/app
-    command: ["pytest", "-q", "-p", "no:cacheprovider", "tests"]
+    networks: [db]
+    command: ["sh", "-c", 'export COVE_TEST_DATABASE_URL="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432/cove_test"; exec pytest -q -p no:cacheprovider tests']
     depends_on:
       postgres:
         condition: service_healthy
+
+secrets:
+  postgres_password: { file: ./secrets/postgres_password.txt }
+  app_password:      { file: ./secrets/app_password.txt }
+  readonly_password: { file: ./secrets/readonly_password.txt }
+  token_pepper:      { file: ./secrets/token_pepper.txt }
+  session_key:       { file: ./secrets/session_key.txt }
+
+networks:
+  db:
+    internal: true     # no route to the internet; only cove services can reach Postgres
+  edge: {}
 
 volumes:
   pgdata:

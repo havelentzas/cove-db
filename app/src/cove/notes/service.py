@@ -19,7 +19,6 @@ import hashlib
 import mimetypes
 import os
 import re
-import secrets
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -551,44 +550,14 @@ def append(ref: str, text: str, actor: str, heading: str | None = None, create: 
     raise Invalid("note kept changing; try again")
 
 
-# ================================================================ device tokens
-TOKEN_PREFIX = "cove_"
+# ================================================================ device tokens (see cove/auth/tokens.py)
+from cove.auth import tokens as _tokens  # noqa: E402
 
-
-def create_token(name: str, actor: str, scopes: list[str] | None = None) -> dict:
-    name = (name or "").strip()
-    if not name:
-        raise Invalid("give the device a name, e.g. 'laptop' or 'iphone'")
-    token = TOKEN_PREFIX + secrets.token_urlsafe(32)
-    with db.conn() as c:
-        row = c.execute("INSERT INTO meta.api_tokens (name, token_hash, scopes) VALUES (%s,%s,%s) "
-                        "RETURNING id, name, scopes, created_at", (name, sha256(token), scopes or ["notes"])).fetchone()
-        _audit(c, actor, "meta.api_token", row["id"], "create", {"name": name})
-    return {**_plain(row), "token": token}
-
-
-def list_tokens() -> list[dict]:
-    with db.conn() as c:
-        return _plain(c.execute("SELECT id, name, scopes, created_at, last_used_at, revoked_at FROM meta.api_tokens "
-                                "ORDER BY revoked_at NULLS FIRST, created_at DESC").fetchall())
-
-
-def revoke_token(token_id: int, actor: str) -> None:
-    with db.conn() as c:
-        r = c.execute("UPDATE meta.api_tokens SET revoked_at = coalesce(revoked_at, now()) WHERE id=%s RETURNING name",
-                      (token_id,)).fetchone()
-        if not r:
-            raise NotFound(f"no token {token_id}")
-        _audit(c, actor, "meta.api_token", token_id, "revoke", {"name": r["name"]})
-
-
-def verify_token(token: str, scope: str = "notes") -> dict | None:
-    if not token or not token.startswith(TOKEN_PREFIX):
-        return None
-    with db.conn() as c:
-        row = c.execute("UPDATE meta.api_tokens SET last_used_at = now() WHERE token_hash=%s AND revoked_at IS NULL "
-                        "AND %s = ANY(scopes) RETURNING id, name, scopes", (sha256(token), scope)).fetchone()
-    return _plain(row) if row else None
+TOKEN_PREFIX = _tokens.ANY_PREFIX
+create_token = _tokens.create
+list_tokens = _tokens.list_all
+revoke_token = _tokens.revoke
+verify_token = _tokens.verify
 
 
 def guess_mime(path: str) -> str:

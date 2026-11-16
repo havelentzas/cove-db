@@ -25,6 +25,9 @@ def configure(url: str, readonly_url: str | None = None) -> None:
 def _pool(kind: str) -> ConnectionPool:
     if kind not in _pools:
         url = _urls.get(kind) or os.environ.get("COVE_DATABASE_URL" if kind == "rw" else "COVE_READONLY_URL")
+        if not url:   # normal deployment: build it from Docker secrets
+            from cove import secrets
+            url = secrets.database_url("cove_app" if kind == "rw" else "cove_readonly")
         if not url:
             raise RuntimeError(f"database URL for {kind!r} is not configured")
         # check=… validates each connection on checkout, so a Postgres restart never surfaces as a 500

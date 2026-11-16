@@ -1,6 +1,8 @@
 #!/bin/sh
 # Nightly logical backup of the cove database with simple retention.
 set -eu
+PGPASSWORD="$(cat /run/secrets/postgres_password)"
+export PGPASSWORD
 while true; do
   ts=$(date +%Y%m%d-%H%M%S)
   if pg_dump -Fc -f "/backups/cove-$ts.dump"; then
