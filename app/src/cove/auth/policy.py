@@ -23,15 +23,22 @@ SCOPES = {
     "notes:read": "Read notes and attachments",
     "notes:write": "Create and edit notes",
     "notes:sync": "Two-way sync of the whole vault (the Obsidian plugin)",
+    "messages:read": "Read your message archive (iMessage, SMS, WhatsApp)",
+    "messages:write": "Curate messages: link senders to people, hide conversations from agents, archive",
+    "messages:ingest": "Send messages in (collectors only); can't read anything back",
     "system:memory": "Read and write the agent's own memory notes",
     "system:sql": "Run read-only SQL over everything in the workspace",
 }
 ALL = frozenset(SCOPES)
+# Viewers read People and Notes. Messages are more private: a viewer doesn't get them unless that changes.
 READ_ONLY = frozenset({"people:read", "notes:read"})
 ROLE_SCOPES = {"owner": ALL, "editor": ALL, "viewer": READ_ONLY}
 # What a new agent token gets unless you tick more: read everything, keep its own memory.
 DEFAULT_AGENT_SCOPES = frozenset({"people:read", "notes:read", "system:memory"})
 DEVICE_SCOPES = frozenset({"notes:read", "notes:write", "notes:sync"})
+INGEST_SCOPES = frozenset({"messages:ingest"})   # what a collector's ingest token (cove_ing_) carries
+# Scopes that belong to a token kind of their own and are never offered for agent tokens
+KIND_ONLY_SCOPES = frozenset({"notes:sync", "messages:ingest"})
 LEGACY = {"notes": DEVICE_SCOPES}   # scope names stored before Phase 4
 
 

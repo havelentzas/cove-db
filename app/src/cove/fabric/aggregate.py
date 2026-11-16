@@ -62,7 +62,7 @@ def context_for(ref_or_name: str, since: str | None = None, until: str | None = 
     described = next((d for d in (desc.value or []) if d["ref"] == ref), None) if desc.ok else None
     timeline = gather("timeline.items", subject_ref=ref, since=since, until=until, limit=limit)
     last = gather("activity.last_contact", refs=[ref])
-    waiting = gather("activity.awaiting_reply", refs=[ref], days=1, limit=10)
+    waiting = gather("activity.awaiting_reply", refs=[ref], days=14, limit=10)
     items = sorted((i for v in timeline.values.values() for i in (v or {}).get("items", [])), key=_ts, reverse=True)
     last_contact: dict[str, Any] = {s: v[ref] for s, v in last.values.items() if v and ref in v}
     return {

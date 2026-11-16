@@ -46,7 +46,7 @@
         <input id="aname" name="name" required placeholder="claude-code, morning-brief…">
         <fieldset style="border:0;padding:0;margin:var(--s3) 0">
           <legend class="label">It can</legend>
-          {% for key, label in scopes.items() if key != 'notes:sync' %}
+          {% for key, label in scopes.items() if key not in kind_only %}
           <label class="toggle-chip" style="margin:0 var(--s1) var(--s1) 0" title="{{ label }}">
             <input type="checkbox" name="scope" value="{{ key }}" {% if key in defaults %}checked{% endif %} {% if key not in mine %}disabled{% endif %}>{{ label }}</label>
           {% endfor %}
@@ -61,7 +61,8 @@
       <ul class="small" style="padding-left:1.1em;margin:0">
         <li>Read-only is the default. Tick write permissions only for agents that need them.</li>
         <li>Agents can't delete anything: archiving and edits are kept in history.</li>
-        <li>“Run SQL” lets an agent read everything in this workspace at once.</li>
+        <li>“Run SQL” lets an agent read everything in this workspace at once, except messages.</li>
+        <li>Messages are off for agents unless you tick them. Conversations you hide from agents and one-time codes are never shown to them.</li>
       </ul>
     </section>
   </aside>

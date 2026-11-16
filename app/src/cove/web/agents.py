@@ -22,7 +22,7 @@ def _page(request: Request, *, new=None, error=None, status=200):
     p = request.state
     return pages.TemplateResponse(request, "agents.html", {
         "svc": CORE, "tokens": tokens.list_all("personal"), "new": new, "error": error,
-        "scopes": policy.SCOPES, "defaults": policy.DEFAULT_AGENT_SCOPES,
+        "scopes": policy.SCOPES, "defaults": policy.DEFAULT_AGENT_SCOPES, "kind_only": policy.KIND_ONLY_SCOPES,
         "mine": policy.effective(p.workspace["role"], None), "mcp_url": mcp_urls()[-1],
     }, status_code=status)
 

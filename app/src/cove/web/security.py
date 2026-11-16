@@ -31,7 +31,9 @@ HEADERS = {
 PUBLIC_ASSETS = ("/static/", "/brand/")
 
 MB = 1024 * 1024
-BODY_LIMITS = (("/api/notes/blobs/", 210 * MB), ("/import", 25 * MB))
+BODY_LIMITS = (("/api/notes/blobs/", 210 * MB), ("/import", 25 * MB),
+               ("/api/v1/messages/ingest/", 8 * MB),        # 1,000 messages per batch, long ones included
+               ("/messages/import/whatsapp", 64 * MB))      # a chat export .zip (export "without media")
 DEFAULT_BODY_LIMIT = 2 * MB
 
 

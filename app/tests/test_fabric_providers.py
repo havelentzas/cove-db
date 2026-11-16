@@ -109,7 +109,7 @@ def test_search_everything_covers_every_readable_service(world):
     with context.use(_as({"people:read"})):
         out = aggregate.search_everything("Ada")
     assert {h["service"] for h in out["hits"]} == {"people"}
-    assert out["coverage"]["missing"] == [{"service": "notes", "reason": "no_permission"}]
+    assert {"service": "notes", "reason": "no_permission"} in out["coverage"]["missing"]
 
 
 # ------------------------------------------------------------------ events

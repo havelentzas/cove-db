@@ -20,7 +20,7 @@ from jinja2 import pass_context
 
 from cove import brand, context
 from cove.auth import policy
-from cove.web import agents, api_v1, auth, hub, notes_api, notes_web, security, services_web
+from cove.web import agents, api_v1, auth, hub, messages_api, notes_api, notes_web, security, services_web
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -460,6 +460,7 @@ app.include_router(api_v1.fabric_router)
 app.include_router(api_v1.meta_router)
 app.include_router(api_v1.people_router)
 app.include_router(api_v1.notes_router)
+app.include_router(messages_api.router)
 
 
 @app.get("/healthz")

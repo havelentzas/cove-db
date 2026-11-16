@@ -1,0 +1,512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cove.invalid/contracts/messages-ingest.v1.json",
+  "title": "cove.messages.ingest/v1",
+  "description": "One batch from a message collector: POST /api/v1/messages/ingest/batch. Idempotent on (source.key, external_id): re-sending is a no-op and changed bodies, edits and retractions update in place. Message text must never be logged by collectors or the server.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "source"
+  ],
+  "properties": {
+    "format": {
+      "const": "cove.messages.ingest/v1"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "key",
+        "platform",
+        "label"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+          "description": "Stable id for this collector, chosen once (e.g. 'imessage-mac')"
+        },
+        "platform": {
+          "enum": [
+            "imessage",
+            "sms",
+            "rcs",
+            "whatsapp",
+            "signal",
+            "telegram",
+            "other"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "collector": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200,
+          "description": "Software and version"
+        }
+      }
+    },
+    "high_water": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Opaque resume point, stored after the batch commits; GET /ingest/state returns it"
+    },
+    "handles": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "required": [
+          "platform",
+          "value"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "platform": {
+            "enum": [
+              "imessage",
+              "sms",
+              "rcs",
+              "whatsapp",
+              "signal",
+              "telegram",
+              "other"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320,
+            "description": "Phone number (any format; normalised to E.164 by the server), email, `name:<display name>` (WhatsApp exports) or a platform id"
+          },
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 300
+          },
+          "is_me": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "conversations": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "required": [
+          "external_id",
+          "platform"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "platform": {
+            "enum": [
+              "imessage",
+              "sms",
+              "rcs",
+              "whatsapp",
+              "signal",
+              "telegram",
+              "other"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "direct",
+              "group"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "participants": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "type": "object",
+              "required": [
+                "platform",
+                "value"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "platform": {
+                  "enum": [
+                    "imessage",
+                    "sms",
+                    "rcs",
+                    "whatsapp",
+                    "signal",
+                    "telegram",
+                    "other"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 320,
+                  "description": "Phone number (any format; normalised to E.164 by the server), email, `name:<display name>` (WhatsApp exports) or a platform id"
+                },
+                "display_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 300
+                },
+                "is_me": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "messages": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": [
+          "external_id",
+          "conversation",
+          "sent_at",
+          "is_from_me"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "conversation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "The conversation's external_id (in this batch or an earlier one)"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "platform",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "platform": {
+                    "enum": [
+                      "imessage",
+                      "sms",
+                      "rcs",
+                      "whatsapp",
+                      "signal",
+                      "telegram",
+                      "other"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 320,
+                    "description": "Phone number (any format; normalised to E.164 by the server), email, `name:<display name>` (WhatsApp exports) or a platform id"
+                  },
+                  "display_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 300
+                  },
+                  "is_me": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when is_from_me"
+          },
+          "is_from_me": {
+            "type": "boolean"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC 3339 with an offset, e.g. 2024-05-01T09:30:00Z"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "RFC 3339 with an offset, e.g. 2024-05-01T09:30:00Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retracted": {
+            "type": "boolean"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100000
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "attachment",
+              "system",
+              "call",
+              "sticker"
+            ]
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "external_id of the message this replies to"
+          },
+          "attachments": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "filename": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 500
+                },
+                "mime": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 200
+                },
+                "size": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          },
+          "platform_meta": {
+            "type": "object",
+            "description": "Small platform-specific details (service, guid…); never message text"
+          }
+        }
+      }
+    },
+    "reactions": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "required": [
+          "target",
+          "type",
+          "is_from_me"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "external_id of the message reacted to"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "platform",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "platform": {
+                    "enum": [
+                      "imessage",
+                      "sms",
+                      "rcs",
+                      "whatsapp",
+                      "signal",
+                      "telegram",
+                      "other"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 320,
+                    "description": "Phone number (any format; normalised to E.164 by the server), email, `name:<display name>` (WhatsApp exports) or a platform id"
+                  },
+                  "display_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 300
+                  },
+                  "is_me": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_from_me": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "love | like | dislike | laugh | emphasize | question | emoji | other"
+          },
+          "emoji": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 40
+          },
+          "removed": {
+            "type": "boolean"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "RFC 3339 with an offset, e.g. 2024-05-01T09:30:00Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "edits": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": [
+          "external_id",
+          "body",
+          "edited_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100000
+          },
+          "edited_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC 3339 with an offset, e.g. 2024-05-01T09:30:00Z"
+          }
+        }
+      }
+    },
+    "retractions": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": [
+          "external_id"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "retracted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "RFC 3339 with an offset, e.g. 2024-05-01T09:30:00Z"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

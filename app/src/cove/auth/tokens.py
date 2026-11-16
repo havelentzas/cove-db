@@ -8,8 +8,9 @@
 - Every token belongs to exactly one workspace (control.api_tokens.workspace_id); verifying a token
   tells you which, and what it may do there: its scopes ∩ its user's current role (cove.auth.policy).
   Removing someone from a workspace therefore disables their tokens at once.
-- Kinds: `device` (cove_dev_, notes sync for the Obsidian plugin) and `personal` (cove_pat_, for agents
-  and scripts: MCP, Claude Code). Agent tokens default to read-only plus the agent's own memory.
+- Kinds: `device` (cove_dev_, notes sync for the Obsidian plugin), `personal` (cove_pat_, for agents
+  and scripts: MCP, Claude Code, /api/v1) and `ingest` (cove_ing_, message collectors: only messages:ingest,
+  only on /api/v1/messages/ingest/*). Agent tokens default to read-only plus the agent's own memory.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import secrets as _secrets
 from cove import context, db, secrets
 from cove.crm.service import Invalid, NotFound, _plain
 
-PREFIXES = {"device": "cove_dev_", "personal": "cove_pat_"}
+PREFIXES = {"device": "cove_dev_", "personal": "cove_pat_", "ingest": "cove_ing_"}
 ANY_PREFIX = "cove_"
 
 
@@ -55,8 +56,13 @@ def create(name: str, actor: str, scopes: list[str] | None = None, kind: str = "
     if kind == "device":
         policy.require("notes:sync")
         wanted = policy.DEVICE_SCOPES
+    elif kind == "ingest":
+        policy.require("messages:ingest")
+        wanted = policy.INGEST_SCOPES
     else:
         wanted = policy.expand(scopes) if scopes else policy.DEFAULT_AGENT_SCOPES
+        if wanted & policy.INGEST_SCOPES:
+            raise Invalid("collectors get an ingest token of their own (Messages › Settings), not an agent token")
         if not wanted:
             raise Invalid("pick at least one permission")
     if not wanted <= p.scopes:
