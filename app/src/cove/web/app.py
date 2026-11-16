@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from cove import brand
-from cove.web import hub, notes_api, notes_web
+from cove.web import hub, notes_api, notes_web, security
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -81,6 +81,9 @@ def _short_d(v):
 pages.env.filters["dt"] = _short_dt
 pages.env.globals["now_iso"] = lambda: datetime.now(timezone.utc).isoformat()
 pages.env.filters["d"] = _short_d
+
+
+app.middleware("http")(security.middleware)
 
 
 @app.middleware("http")

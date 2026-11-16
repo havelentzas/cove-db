@@ -4,7 +4,7 @@
   <a href="/" aria-current="page">Services</a>
   {% for s in SERVICES if s.status == 'live' %}<a href="{{ s.path }}">{{ s.name }}</a>{% endfor %}
 {% endblock %}
-{% block header_action %}<button class="secondary" type="button" onclick="document.getElementById('info-core').showModal()">{{ icon('link') }}Connect an agent</button>{% endblock %}
+{% block header_action %}<button class="secondary" type="button" data-open="info-core">{{ icon('link') }}Connect an agent</button>{% endblock %}
 {% block footer_action %}<a href="/api/services" class="muted" style="text-decoration:none">{{ icon('download') }} Catalog (JSON)</a>{% endblock %}
 
 {% macro sheet(s) %}
@@ -84,7 +84,7 @@
     <div class="foot" {% if not stats.get(s.key) %}style="margin-top:auto"{% endif %}>
       <span class="xs muted mono">{{ s.mcp_tools|length }} tools · {{ s.web_routes|length }} routes</span>
       <span class="spacer"></span>
-      <button class="info-btn" type="button" onclick="document.getElementById('info-{{ s.id }}').showModal()" aria-label="{{ s.name }} endpoints" title="Endpoints">i</button>
+      <button class="info-btn" type="button" data-open="info-{{ s.id }}" aria-label="{{ s.name }} endpoints" title="Endpoints">i</button>
     </div>
   </article>
   {% endfor %}
@@ -97,28 +97,10 @@
       <h2 style="margin-bottom:var(--s1)">{{ icon('link') }} System &amp; agents</h2>
       <p class="small muted" style="margin:0">{{ core.blurb }} {{ core.mcp_tools|length }} shared MCP tools.</p>
     </div>
-    <div class="shrink"><button class="info-btn" type="button" onclick="document.getElementById('info-core').showModal()" aria-label="System endpoints" title="Endpoints">i</button></div>
+    <div class="shrink"><button class="info-btn" type="button" data-open="info-core" aria-label="System endpoints" title="Endpoints">i</button></div>
   </div>
 </section>
 
 {% for s in cat.services %}{{ sheet(s) }}{% endfor %}
 
-<script>
-document.addEventListener("click", function (e) {
-  var b = e.target.closest("[data-copy]"); if (!b) return;
-  var done = function () { var t = b.textContent; b.textContent = "Copied"; setTimeout(function () { b.textContent = t; }, 1200); };
-  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(b.dataset.copy).then(done); }
-  else { var ta = document.createElement("textarea"); ta.value = b.dataset.copy; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (_) {} ta.remove(); }
-});
-document.querySelectorAll("dialog.sheet").forEach(function (d) {
-  d.addEventListener("click", function (e) { if (e.target === d) d.close(); });   // click backdrop to close
-  d.addEventListener("close", function () { if (location.hash === "#" + d.id) history.replaceState(null, "", location.pathname); });
-});
-// deep link: /#info-people opens that sheet
-var deep = location.hash && document.getElementById(location.hash.slice(1));
-if (deep && deep.tagName === "DIALOG") deep.showModal();
-document.querySelectorAll("[onclick*='showModal']").forEach(function (b) {
-  b.addEventListener("click", function () { var id = (b.getAttribute("onclick").match(/'(info-[^']+)'/) || [])[1]; if (id) history.replaceState(null, "", "#" + id); });
-});
-</script>
 {% endblock %}

@@ -17,7 +17,7 @@
       {% for f in section.fields %}
       <div {% if f.type in ('textarea', 'set') %}style="flex-basis:100%"{% endif %}><label for="r__{{ rep }}__{{ i }}__{{ f.key }}">{{ f.label }}</label>{{ input(f, 'r__' ~ rep ~ '__' ~ i ~ '__' ~ f.key, row[f.key] if row else ('' if f.type != 'set' else [])) }}</div>
       {% endfor %}
-      <div class="shrink"><button type="button" class="link xs" onclick="this.closest('.rrow').remove()">remove</button></div>
+      <div class="shrink"><button type="button" class="link xs" data-remove-row>remove</button></div>
     </div>
   </div>
 {% endmacro %}
@@ -42,7 +42,7 @@
         {% if not values.repeats.get(rep) %}{{ repeat_row(section, rep, 0, None) }}{% endif %}
       </div>
       <template id="tpl-{{ rep }}">{{ repeat_row(section, rep, '__IDX__', None) }}</template>
-      <button type="button" class="ghost" style="margin-top:var(--s2)" onclick="addRow('{{ rep }}')">{{ icon('plus') }}Add another</button>
+      <button type="button" class="ghost" style="margin-top:var(--s2)" data-add-row="{{ rep }}">{{ icon('plus') }}Add another</button>
     {% else %}
       <div class="row">
       {% for f in section.fields %}
@@ -63,11 +63,4 @@
     <span class="xs muted">Fields come from <code>templates/{{ t.id }}.json</code></span>
   </div>
 </form>
-<script>
-let next = 1000;
-function addRow(rep){
-  const tpl = document.getElementById('tpl-' + rep).innerHTML.replaceAll('__IDX__', String(next++));
-  document.getElementById('rows-' + rep).insertAdjacentHTML('beforeend', tpl);
-}
-</script>
 {% endblock %}

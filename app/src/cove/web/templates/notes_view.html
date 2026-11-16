@@ -1,15 +1,6 @@
 {% extends "notes_base.html" %}
 {% block title %}{{ f.title }}{% endblock %}
-{% block head %}<script src="/static/d3.min.js" defer></script><script src="/static/graph.js" defer></script>
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const el = document.getElementById("local-graph");
-  const data = {{ local_graph|tojson }};
-  if (data.nodes.length < 2) { el.innerHTML = '<p class="small muted" style="padding:var(--s3)">No links yet.</p>'; return; }
-  coveGraph(el, data, { focus: "{{ f.id }}", compact: true, preTicks: 200,
-                        onOpen: n => n.url && (location.href = n.url) });
-});
-</script>{% endblock %}
+{% block head %}<script src="/static/d3.min.js" defer></script><script src="/static/graph.js" defer></script><script src="/static/notes-graph.js" defer></script>{% endblock %}
 {% block notes_main %}
 <div class="page-head">
   <div>
@@ -43,7 +34,8 @@ document.addEventListener("DOMContentLoaded", () => {
         <h2 style="margin:0">Local graph</h2>
         <a class="shrink small" href="/notes/graph?focus={{ f.id }}&depth=2">Open ↗</a>
       </div>
-      <div id="local-graph" class="graph-box" style="height:300px"></div>
+      <div id="local-graph" class="graph-box" style="height:300px" data-focus="{{ f.id }}"></div>
+      <script type="application/json" id="local-graph-data">{{ local_graph|tojson }}</script>
     </section>
     <section class="card">
       <h2>{{ icon('link') }} Linked from</h2>

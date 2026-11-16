@@ -69,7 +69,7 @@
           <div><strong>{{ i.summary }}</strong></div>
           <div class="when">{{ i.occurred_at|dt }} · {{ {'call':'call','meeting':'in person','message':'message','email':'email','other':'other'}[i.kind] }}{% if i.people|length > 1 %} · with {% for p in i.people if p.id != c.id %}<a href="/contacts/{{ p.id }}">{{ p.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</div>
           {% if i.notes %}<div class="small" style="white-space:pre-wrap;margin-top:4px">{{ i.notes }}</div>{% endif %}
-          <form method="post" action="/interactions/{{ i.id }}/delete" onsubmit="return confirm('Remove this conversation from the log?')">
+          <form method="post" action="/interactions/{{ i.id }}/delete" data-confirm="Remove this conversation from the log?">
             <input type="hidden" name="contact" value="{{ c.id }}"><button class="link xs">remove</button></form>
         </li>
         {% endfor %}

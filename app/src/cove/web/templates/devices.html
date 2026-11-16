@@ -9,7 +9,7 @@
 {% if new %}
 <div class="notice" role="status" style="display:block">
   <strong>Token for “{{ new.name }}” — copy it now, it won't be shown again.</strong>
-  <div class="copyline" style="margin:var(--s3) 0 0"><code id="tok">{{ new.token }}</code><button class="secondary" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('tok').textContent).then(()=>this.textContent='Copied')">Copy</button></div>
+  <div class="copyline" style="margin:var(--s3) 0 0"><code id="tok">{{ new.token }}</code><button class="secondary" type="button" data-copy-from="tok">Copy</button></div>
   <p class="xs muted" style="margin:var(--s2) 0 0">Paste it into the cove-sync plugin settings along with this server's address.</p>
 </div>
 {% endif %}
@@ -26,7 +26,7 @@
         <td class="small">{{ t.created_at|d }}</td>
         <td class="small">{{ t.last_used_at|dt or 'never' }}</td>
         <td>{% if t.revoked_at %}<span class="chip">revoked</span>{% else %}
-          <form method="post" action="/settings/devices/{{ t.id }}/revoke" onsubmit="return confirm('Revoke {{ t.name }}? It will stop syncing.')"><button class="link xs">revoke</button></form>{% endif %}</td>
+          <form method="post" action="/settings/devices/{{ t.id }}/revoke" data-confirm="Revoke {{ t.name }}? It will stop syncing."><button class="link xs">revoke</button></form>{% endif %}</td>
       </tr>
       {% endfor %}
       </tbody>

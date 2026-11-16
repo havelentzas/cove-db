@@ -19,7 +19,7 @@
         <td><div class="actions" style="flex-wrap:nowrap">
           <button form="t{{ t.id }}" class="secondary">Save</button>
           <a class="btn ghost" href="/export.vcf?tag={{ t.name|urlencode }}" title="Export this circle">{{ icon('download') }}</a>
-          <form method="post" action="/tags/{{ t.id }}/delete" onsubmit="return confirm('Delete the circle “{{ t.name }}”? The people in it stay.')"><button class="link xs">delete</button></form>
+          <form method="post" action="/tags/{{ t.id }}/delete" data-confirm="Delete the circle “{{ t.name }}”? The people in it stay."><button class="link xs">delete</button></form>
         </div></td>
       </tr>
     {% endfor %}

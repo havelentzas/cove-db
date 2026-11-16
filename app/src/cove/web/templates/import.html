@@ -30,8 +30,8 @@
   <input type="hidden" name="token" value="{{ token }}">
   <section class="card">
     <p style="margin-top:0"><strong>{{ items|length }}</strong> contact(s) found{% if dupes %}, <strong>{{ dupes|length }}</strong> look like duplicates (unticked){% endif %}{% if items|length - ok|length %}, <strong>{{ items|length - ok|length }}</strong> can't be imported{% endif %}.
-      <button type="button" class="link" onclick="document.querySelectorAll('input[name=pick]:not(:disabled)').forEach(x=>x.checked=true)">tick all</button>
-      · <button type="button" class="link" onclick="document.querySelectorAll('input[name=pick]').forEach(x=>x.checked=false)">untick all</button></p>
+      <button type="button" class="link" data-check="all" data-target="input[name=pick]">tick all</button>
+      · <button type="button" class="link" data-check="none" data-target="input[name=pick]">untick all</button></p>
     {% if preview.errors %}
     <details class="notice error" open><summary>{{ preview.errors|length }} card(s) in the file couldn't be read and will be skipped</summary>
       <ul class="small">{% for e in preview.errors %}<li>{{ e }}</li>{% endfor %}</ul></details>

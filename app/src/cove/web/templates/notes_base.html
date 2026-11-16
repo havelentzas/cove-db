@@ -28,10 +28,4 @@
   </details>
   <div class="notes-main">{% block notes_main %}{% endblock %}</div>
 </div>
-<script>
-  // keep the current file/folder visible in a long tree
-  (function(){ var c=document.querySelector('.tree .current'); if(c) c.scrollIntoView({block:'center'}); })();
-  // on phones the tree starts collapsed
-  if (window.matchMedia('(max-width: 900px)').matches) document.querySelector('.vault-tree').removeAttribute('open');
-</script>
 {% endblock %}
