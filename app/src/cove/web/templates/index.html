@@ -1,35 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Contacts{% endblock %}
+{% block title %}{% if due %}Reach out{% else %}Everyone{% endif %}{% endblock %}
 {% block body %}
-{% if request.query_params.get('imported') %}<div class="flash">Imported {{ request.query_params.get('imported') }} contact(s).</div>{% endif %}
+{% if request.query_params.get('imported') %}<div class="notice">{{ icon('check') }} Welcomed {{ request.query_params.get('imported') }} new {{ 'person' if request.query_params.get('imported') == '1' else 'people' }}.</div>{% endif %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{ SERVICE.name }}</div>
+    <h1>{% if due %}Worth reaching out to{% elif tag %}{{ tag }}{% else %}Everyone{% endif %}</h1>
+    <p class="lede">{% if due %}People you meant to keep in touch with. A quick message counts.{% else %}{{ SERVICE.blurb }}{% endif %}</p>
+  </div>
+</div>
 <div class="grid">
-  <section class="panel">
-    <form class="row" action="/" method="get"
-          hx-get="/" hx-target="#rows" hx-trigger="input changed delay:250ms from:#q, change" hx-push-url="true">
-      <input id="q" name="q" value="{{ q }}" placeholder="Search name, email, phone, notes…" autocomplete="off" autofocus>
-      <select name="tag" class="shrink" style="width:auto">
-        <option value="">All tags</option>
-        {% for t in tags %}<option value="{{ t.name }}" {% if t.name == tag %}selected{% endif %}>{{ t.name }}{% if t.kind == 'group' %} (group){% endif %}</option>{% endfor %}
-      </select>
-      <label class="shrink" style="margin:0"><input type="checkbox" name="due" value="1" style="width:auto" {% if due %}checked{% endif %}> Due</label>
-      <label class="shrink" style="margin:0"><input type="checkbox" name="archived" value="1" style="width:auto" {% if archived %}checked{% endif %}> Archived</label>
+  <section class="card">
+    <form action="/" method="get" hx-get="/" hx-target="#rows" hx-trigger="input changed delay:200ms from:#q, change" hx-push-url="true">
+      <div class="search">{{ icon('search') }}<input id="q" name="q" value="{{ q }}" type="search" placeholder="Find someone by name, email, phone or note" autocomplete="off" autofocus aria-label="Search people"></div>
+      <div class="actions" style="margin-top:var(--s3)">
+        <select name="tag" aria-label="Circle" class="select-chip">
+          <option value="">All circles</option>
+          {% for t in tags %}<option value="{{ t.name }}" {% if t.name == tag %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+        </select>
+        <label class="toggle-chip"><input type="checkbox" name="due" value="1" {% if due %}checked{% endif %}>{{ icon('bell') }} Due</label>
+        <label class="toggle-chip"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}>{{ icon('archive') }} Archived</label>
+      </div>
     </form>
-    <div class="table-wrap" style="margin-top:12px">
-      <table>
-        <thead><tr><th>Name</th><th>Tags</th><th>Last contact</th><th>Next due</th></tr></thead>
-        <tbody id="rows">{% include "_rows.html" %}</tbody>
-      </table>
-    </div>
+    <ul class="list" id="rows" style="margin-top:var(--s3)">{% include "_rows.html" %}</ul>
   </section>
   <aside>
-    <section class="panel">
-      <h2>Due for follow-up</h2>
+    <section class="card accent">
+      <h2>{{ icon('bell') }} Reach out soon</h2>
       {% if due_list %}
-      <ul class="plain">
-        {% for d in due_list %}<li style="margin-bottom:6px"><a href="/contacts/{{ d.id }}">{{ d.display_name }}</a>
-          <div class="small muted">due {{ d.next_due|d }} · every {{ d.every_days }}d</div></li>{% endfor %}
+      <ul class="list">
+        {% for d in due_list %}
+        <li><a class="list-item" href="/contacts/{{ d.id }}" style="padding:var(--s2) var(--s1)">
+          <span class="avatar" style="--size:34px">{{ d.display_name|initials }}</span>
+          <span class="grow"><span class="title">{{ d.display_name }}</span>
+            <span class="sub mono xs">last: {{ d.last_contacted|d or 'never' }}</span></span></a></li>
+        {% endfor %}
       </ul>
-      {% else %}<p class="muted small">Nobody is due. Set a cadence on a contact to get reminders here.</p>{% endif %}
+      {% else %}
+      <p class="small" style="margin:0">All caught up. Set a rhythm on someone's page (“every 30 days”) and they'll show up here when it's time.</p>
+      {% endif %}
     </section>
   </aside>
 </div>

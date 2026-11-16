@@ -1,117 +1,146 @@
 {% extends "base.html" %}
 {% block title %}{{ c.display_name }}{% endblock %}
 {% block body %}
-<div class="row" style="align-items:center;margin-bottom:14px">
-  {% if photo %}<img class="avatar shrink" src="{{ photo }}" alt="">{% endif %}
-  <div>
-    <h1>{{ c.display_name }}{% if c.archived_at %} <span class="chip">archived</span>{% endif %}</h1>
-    <div>{% for t in c.tags %}<a class="chip {{ t.kind }}" href="/?tag={{ t.name|urlencode }}">{{ t.name }}</a>{% endfor %}</div>
+<div class="page-head" style="align-items:center">
+  <div style="display:flex;gap:var(--s4);align-items:center;flex:1 1 320px">
+    {% if photo %}<img class="avatar lg" src="{{ photo }}" alt="">{% else %}<span class="avatar lg">{{ c.display_name|initials }}</span>{% endif %}
+    <div>
+      <a class="small muted" href="/" style="text-decoration:none">{{ icon('arrow-left') }} Everyone</a>
+      <h1>{{ c.display_name }}</h1>
+      <div>
+        {% if c.archived_at %}<span class="chip">archived</span>{% endif %}
+        {% for t in c.tags %}<a class="chip accent {{ t.kind }}" href="/?tag={{ t.name|urlencode }}">{{ t.name }}</a>{% endfor %}
+        <span class="eyebrow">{% if c.last_contacted %}Last talked {{ c.last_contacted|d }}{% else %}No conversations yet{% endif %}</span>
+      </div>
+    </div>
   </div>
-  <div class="shrink"><a class="btn" href="/contacts/{{ c.id }}/edit">Edit</a></div>
-  <form class="shrink" method="post" action="/contacts/{{ c.id }}/archive">
-    <input type="hidden" name="archived" value="{{ 'false' if c.archived_at else 'true' }}">
-    <button class="secondary" type="submit">{{ 'Restore' if c.archived_at else 'Archive' }}</button></form>
+  <div class="actions">
+    <a class="btn" href="/contacts/{{ c.id }}/edit">{{ icon('edit') }}Edit details</a>
+    <form method="post" action="/contacts/{{ c.id }}/archive">
+      <input type="hidden" name="archived" value="{{ 'false' if c.archived_at else 'true' }}">
+      <button class="secondary" type="submit">{{ icon('archive') }}{{ 'Bring back' if c.archived_at else 'Archive' }}</button></form>
+  </div>
 </div>
+
 <div class="grid">
   <div>
-    <section class="panel">
+    <section class="card">
       {% if sections %}
       {% for s in sections %}
-        <h2 style="margin-top:{{ '0' if loop.first else '16px' }}">{{ s.title }}</h2>
-        <dl>
+        <div class="section"><h2>{{ s.title }}</h2>
+        <dl class="fields">
         {% for it in s['items'] %}
           {% if s.repeat %}
-            <dt>{% for x in it.tags %}{{ x }} {% endfor %}</dt>
+            <dt>{{ it.tags|join(' · ') }}</dt>
             <dd>{% if it.kind == 'email' %}<a href="mailto:{{ it.value }}">{{ it.value }}</a>{% elif it.kind == 'tel' %}<a href="tel:{{ it.value }}">{{ it.value }}</a>{% elif it.kind == 'url' %}<a href="{{ it.value }}" rel="noreferrer noopener" target="_blank">{{ it.value }}</a>{% else %}{{ it.value }}{% endif %}{% for e in it.extra %} <span class="muted">· {{ e }}</span>{% endfor %}</dd>
           {% else %}
             <dt>{{ it.label }}</dt><dd>{{ it.value }}</dd>
           {% endif %}
         {% endfor %}
-        </dl>
+        </dl></div>
       {% endfor %}
-      {% else %}<p class="muted">No details yet. <a href="/contacts/{{ c.id }}/edit">Add some.</a></p>{% endif %}
+      {% else %}
+      <div class="empty" style="padding:var(--s4)"><div class="display">Just a name for now</div>
+        <p class="small">Add an email, a birthday, or how you met — whatever helps you remember.</p>
+        <a class="btn secondary" href="/contacts/{{ c.id }}/edit">{{ icon('edit') }}Add details</a></div>
+      {% endif %}
     </section>
 
-    <section class="panel">
-      <h2>Interactions</h2>
-      <form method="post" action="/contacts/{{ c.id }}/interactions">
+    <section class="card">
+      <h2>{{ icon('chat') }} Conversations</h2>
+      <form method="post" action="/contacts/{{ c.id }}/interactions" class="card inset tight">
         <div class="row">
-          <div><label>What happened</label><input name="summary" required placeholder="Coffee at Kin, talked about her new job"></div>
-          <div class="shrink"><label>Kind</label><select name="kind">{% for k in INTERACTION_KINDS %}<option {% if k == 'meeting' %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></div>
-          <div class="shrink"><label>When</label><input type="datetime-local" name="occurred_at"></div>
+          <div style="flex-basis:100%"><label for="summary" style="margin-top:0">What did you talk about?</label>
+            <input id="summary" name="summary" required placeholder="Coffee at Kin — she's starting the new job in March"></div>
+          <div class="shrink"><label>How</label><select name="kind">{% for k in INTERACTION_KINDS %}<option value="{{ k }}" {% if k == 'meeting' %}selected{% endif %}>{{ {'call':'Call','meeting':'In person','message':'Message','email':'Email','other':'Other'}[k] }}</option>{% endfor %}</select></div>
+          <div class="shrink"><label>When</label><input type="datetime-local" name="occurred_at" title="Leave empty for now"></div>
         </div>
-        <label>Notes</label><textarea name="notes" style="min-height:44px"></textarea>
-        <label>Also with</label>
-        <select name="also" multiple size="3">{% for o in others %}<option value="{{ o.id }}">{{ o.display_name }}</option>{% endfor %}</select>
-        <div style="margin-top:8px"><button type="submit">Log interaction</button></div>
+        <details style="margin-top:var(--s2)"><summary class="small muted" style="font-weight:500">More — notes, others who were there</summary>
+          <label>Notes</label><textarea name="notes" style="min-height:60px"></textarea>
+          <label>Also there</label>
+          <select name="also" multiple size="4">{% for o in others %}<option value="{{ o.id }}">{{ o.display_name }}</option>{% endfor %}</select>
+        </details>
+        <div style="margin-top:var(--s3)"><button type="submit">{{ icon('check') }}Log it</button></div>
       </form>
-      <ul class="plain timeline" style="margin-top:16px">
+      {% if c.recent_interactions %}
+      <ul class="timeline" style="margin-top:var(--s5)">
         {% for i in c.recent_interactions %}
-        <li><strong>{{ i.summary }}</strong> <span class="chip">{{ i.kind }}</span>
-          <div class="small muted">{{ i.occurred_at|dt }}{% if i.people|length > 1 %} · with {% for p in i.people if p.id != c.id %}<a href="/contacts/{{ p.id }}">{{ p.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</div>
-          {% if i.notes %}<div class="small" style="white-space:pre-wrap">{{ i.notes }}</div>{% endif %}
-          <form method="post" action="/interactions/{{ i.id }}/delete" onsubmit="return confirm('Delete this interaction?')">
-            <input type="hidden" name="contact" value="{{ c.id }}"><button class="link">delete</button></form>
+        <li>
+          <div><strong>{{ i.summary }}</strong></div>
+          <div class="when">{{ i.occurred_at|dt }} · {{ {'call':'call','meeting':'in person','message':'message','email':'email','other':'other'}[i.kind] }}{% if i.people|length > 1 %} · with {% for p in i.people if p.id != c.id %}<a href="/contacts/{{ p.id }}">{{ p.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</div>
+          {% if i.notes %}<div class="small" style="white-space:pre-wrap;margin-top:4px">{{ i.notes }}</div>{% endif %}
+          <form method="post" action="/interactions/{{ i.id }}/delete" onsubmit="return confirm('Remove this conversation from the log?')">
+            <input type="hidden" name="contact" value="{{ c.id }}"><button class="link xs">remove</button></form>
         </li>
-        {% else %}<li class="muted small">No interactions logged yet.</li>{% endfor %}
+        {% endfor %}
       </ul>
+      {% else %}<p class="small muted" style="margin:var(--s4) 0 0">Nothing logged yet. Even a one-liner helps future-you remember.</p>{% endif %}
     </section>
   </div>
 
   <aside>
-    <section class="panel">
-      <h2>Follow-up</h2>
-      <p class="small">Last contact: <strong>{{ c.last_contacted|d or 'never' }}</strong>
-      {% if c.follow_up %}<br>Next due: <strong>{{ c.follow_up.next_due|d }}</strong>{% endif %}</p>
+    <section class="card accent">
+      <h2>{{ icon('bell') }} Rhythm</h2>
+      {% if c.follow_up %}
+        <p class="small" style="margin:0 0 var(--s2)">Every <strong>{{ c.follow_up.every_days }} days</strong> · next nudge <strong>{{ c.follow_up.next_due|d }}</strong></p>
+      {% else %}<p class="small muted" style="margin:0 0 var(--s2)">How often would you like to catch up? We'll nudge you when it's been a while.</p>{% endif %}
       <form method="post" action="/contacts/{{ c.id }}/follow-up">
-        <label>Reach out every … days</label>
-        <input name="every_days" type="number" min="1" value="{{ c.follow_up.every_days if c.follow_up else '' }}" placeholder="e.g. 30 (blank = off)">
-        <label>Snooze until</label>
-        <input name="snoozed_until" type="date" value="{{ (c.follow_up.snoozed_until|d) if c.follow_up else '' }}">
-        <div style="margin-top:8px"><button type="submit">Save</button></div>
+        <div class="row">
+          <div><label>Every … days</label><input name="every_days" type="number" min="1" value="{{ c.follow_up.every_days if c.follow_up else '' }}" placeholder="30"></div>
+          <div><label>Snooze until</label><input name="snoozed_until" type="date" value="{{ (c.follow_up.snoozed_until|d) if c.follow_up else '' }}"></div>
+        </div>
+        <div class="actions" style="margin-top:var(--s3)"><button type="submit">Save rhythm</button>
+          {% if c.follow_up %}<button class="ghost" type="submit" form="rhythm-off">Turn off</button>{% endif %}</div>
       </form>
+      <form id="rhythm-off" method="post" action="/contacts/{{ c.id }}/follow-up"><input type="hidden" name="every_days" value=""></form>
     </section>
 
-    <section class="panel">
-      <h2>Tags &amp; groups</h2>
+    <section class="card">
+      <h2>{{ icon('tag') }} Circles</h2>
       <form method="post" action="/contacts/{{ c.id }}/tags">
-        <input name="tags" list="taglist" value="{{ c.tags|map(attribute='name')|join(', ') }}" placeholder="comma separated">
+        <input name="tags" list="taglist" value="{{ c.tags|map(attribute='name')|join(', ') }}" placeholder="family, climbing, uni friends" aria-label="Circles, comma separated">
         <datalist id="taglist">{% for t in all_tags %}<option value="{{ t.name }}">{% endfor %}</datalist>
-        <div style="margin-top:8px"><button type="submit">Save tags</button></div>
+        <div style="margin-top:var(--s3)"><button class="secondary" type="submit">Save circles</button></div>
       </form>
     </section>
 
-    <section class="panel">
-      <h2>Relationships</h2>
-      <ul class="plain">
+    <section class="card">
+      <h2>{{ icon('link') }} People they're linked to</h2>
+      {% if c.relationships %}
+      <ul class="list">
       {% for r in c.relationships %}
-        <li style="margin-bottom:6px">
-          {% if r.direction == 'outgoing' %}<span class="muted">{{ r.type }} of</span> <a href="/contacts/{{ r.other_id }}">{{ r.other_name }}</a>
-          {% else %}<a href="/contacts/{{ r.other_id }}">{{ r.other_name }}</a> <span class="muted">is their {{ r.type }}</span>{% endif %}
-          {% if r.note %}<div class="small muted">{{ r.note }}</div>{% endif %}
-          <form method="post" action="/relationships/{{ r.id }}/delete" style="display:inline"><input type="hidden" name="contact" value="{{ c.id }}"><button class="link">remove</button></form>
+        <li class="list-item" style="padding:var(--s2) 0">
+          <span class="avatar" style="--size:32px">{{ r.other_name|initials }}</span>
+          <span class="grow small">
+            {% if r.direction == 'outgoing' %}{{ r.type|capitalize }} of <a href="/contacts/{{ r.other_id }}">{{ r.other_name }}</a>
+            {% else %}<a href="/contacts/{{ r.other_id }}">{{ r.other_name }}</a> is their {{ r.type }}{% endif %}
+            {% if r.note %}<span class="muted" style="display:block">{{ r.note }}</span>{% endif %}
+          </span>
+          <form method="post" action="/relationships/{{ r.id }}/delete"><input type="hidden" name="contact" value="{{ c.id }}"><button class="link xs" aria-label="Remove link">remove</button></form>
         </li>
-      {% else %}<li class="muted small">None yet.</li>{% endfor %}
+      {% endfor %}
       </ul>
+      {% endif %}
       {% if others %}
-      <form method="post" action="/contacts/{{ c.id }}/relationships" style="margin-top:10px">
-        <label>{{ c.display_name }} is a…</label>
-        <input name="relation" list="rels" required placeholder="friend, sibling, colleague…">
+      <details {% if not c.relationships %}open{% endif %} style="margin-top:var(--s2)"><summary class="small">Link someone</summary>
+      <form method="post" action="/contacts/{{ c.id }}/relationships">
+        <label>{{ c.display_name.split(' ')[0] }} is a…</label>
+        <input name="relation" list="rels" required placeholder="friend, sister, colleague…">
         <datalist id="rels">{% for r in RELATION_TYPES %}<option value="{{ r }}">{% endfor %}</datalist>
         <label>of</label>
         <select name="to_id" required>{% for o in others %}<option value="{{ o.id }}">{{ o.display_name }}</option>{% endfor %}</select>
-        <label>Note</label><input name="note">
-        <div style="margin-top:8px"><button type="submit">Add relationship</button></div>
+        <label>Note <span class="muted">(optional)</span></label><input name="note">
+        <div style="margin-top:var(--s3)"><button class="secondary" type="submit">Add link</button></div>
       </form>
-      {% endif %}
+      </details>
+      {% else %}<p class="small muted" style="margin:0">Once you add a few more people you can link them here.</p>{% endif %}
     </section>
 
-    <section class="panel">
-      <h2>History</h2>
-      <ul class="plain small">
-        {% for a in audit %}<li class="muted">{{ a.at|dt }} · {{ a.action }} by {{ a.actor }}</li>{% endfor %}
+    <section class="card flat tight">
+      <div class="eyebrow" style="margin-bottom:var(--s3)">{{ icon('clock') }} History</div>
+      <ul class="list xs muted">
+        {% for a in audit %}<li style="padding:3px 0;border:0">{{ a.at|dt }} · {{ a.action|replace('_',' ') }} · {{ a.actor|who }}</li>{% endfor %}
       </ul>
-      <p class="small"><a href="/export.vcf?{{ {'tag': ''}|urlencode }}" download>Export all as vCard</a></p>
     </section>
   </aside>
 </div>

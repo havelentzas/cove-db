@@ -1,11 +1,29 @@
+{% from "_icons.html" import icon %}
 {% for r in rows %}
-<tr>
-  <td><a href="/contacts/{{ r.id }}"><strong>{{ r.display_name }}</strong></a>{% if r.archived_at %} <span class="chip">archived</span>{% endif %}
-    <div class="small muted">{{ r.organization or '' }}{% if r.organization and r.emails %} · {% endif %}{{ r.emails[0] if r.emails else '' }}</div></td>
-  <td>{% for t in r.tags %}<a class="chip" href="/?tag={{ t|urlencode }}">{{ t }}</a>{% endfor %}</td>
-  <td class="small">{{ r.last_contacted|d or '—' }}</td>
-  <td class="small {% if r.next_due and r.next_due <= now_iso() %}due{% endif %}">{{ r.next_due|d or '—' }}</td>
-</tr>
+<li>
+  <a class="list-item" href="/contacts/{{ r.id }}">
+    <span class="avatar">{{ r.display_name|initials }}</span>
+    <span class="grow">
+      <span class="title">{{ r.display_name }}</span>{% if r.archived_at %} <span class="chip">archived</span>{% endif %}
+      {% if r.organization or r.emails %}<span class="sub">{{ r.organization or '' }}{% if r.organization and r.emails %} · {% endif %}{{ r.emails[0] if r.emails else '' }}</span>{% endif %}
+      {% if r.tags %}<span style="display:block">{% for t in r.tags %}<span class="chip">{{ t }}</span>{% endfor %}</span>{% endif %}
+    </span>
+    <span class="meta">
+      {% if r.next_due and r.next_due <= now_iso() %}<span class="due">due</span><br>{% endif %}
+      {% if r.last_contacted %}last {{ r.last_contacted|d }}{% else %}—{% endif %}
+    </span>
+  </a>
+</li>
 {% else %}
-<tr><td colspan="4" class="muted">No contacts{% if q or tag or due %} match{% endif %}. <a href="/contacts/new">Add one</a> or <a href="/import">import a .vcf</a>.</td></tr>
+<li class="empty">
+  {{ MARK|safe }}
+  {% if q or tag or due %}
+  <div class="display">No one matches that</div>
+  <p class="small">Try fewer letters, or <a href="/">clear the filters</a>.</p>
+  {% else %}
+  <div class="display">Your cove is quiet</div>
+  <p class="small">Add someone you'd like to keep close, or bring everyone over from your phone or Google Contacts.</p>
+  <div class="actions" style="justify-content:center"><a class="btn" href="/contacts/new">{{ icon('plus') }}Add someone</a><a class="btn secondary" href="/import">{{ icon('upload') }}Import a .vcf</a></div>
+  {% endif %}
+</li>
 {% endfor %}

@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from cove import brand
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -21,8 +22,35 @@ TEMPLATE_NAME = "contact-default"
 
 app = FastAPI(title="cove", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
+app.mount("/brand", StaticFiles(directory=brand.BRAND_DIR), name="brand")
 pages = Jinja2Templates(directory=HERE / "templates")
-pages.env.globals.update(INTERACTION_KINDS=svc.INTERACTION_KINDS, RELATION_TYPES=svc.RELATION_TYPES)
+pages.env.globals.update(INTERACTION_KINDS=svc.INTERACTION_KINDS, RELATION_TYPES=svc.RELATION_TYPES,
+                         SERVICE=brand.service("people"), SERVICES=brand.registry()["services"],
+                         MARK=brand.mark_svg())
+
+
+def _initials(name: str) -> str:
+    parts = [p for p in (name or "").replace("@", " ").split() if p[:1].isalnum()]
+    if not parts:
+        return "·"
+    return (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper()
+
+
+pages.env.filters["initials"] = _initials
+
+
+def _who(actor: str) -> str:
+    """Friendly audit actor: 'web:me@x' -> 'you', 'mcp:claude-code' -> 'agent (claude-code)'."""
+    actor = actor or ""
+    suffix = " · import" if actor.endswith(":import") else ""
+    if actor.startswith("web"):
+        return "you" + suffix
+    if actor.startswith("mcp:"):
+        return f"agent ({actor[4:]})"
+    return actor
+
+
+pages.env.filters["who"] = _who
 
 
 def _local(v):

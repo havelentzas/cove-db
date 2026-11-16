@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Import{% endblock %}
 {% block body %}
-<h1>Import contacts</h1>
-{% if error %}<div class="errors">{{ error }}</div>{% endif %}
+<div class="page-head"><div><div class="eyebrow">{{ SERVICE.name }}</div><h1>Bring people over</h1>
+  <p class="lede">From your phone, Google Contacts or any address book that exports vCard (.vcf). Nothing is saved until you say so.</p></div></div>
+{% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
 {% if result %}
-<section class="panel">
+<section class="card">
   <p>Imported <strong>{{ result.created|length }}</strong> contact(s).
     {{ result.failed|length }} couldn't be saved:</p>
   <ul class="small">{% for f in result.failed %}<li>{{ f }}</li>{% endfor %}</ul>
@@ -13,12 +14,11 @@
 </section>
 
 {% elif not preview %}
-<section class="panel">
-  <p>Upload a <code>.vcf</code> file (vCard 2.1, 3.0 or 4.0). From Google Contacts: <em>Export → vCard (for iOS Contacts)</em>.
-    Nothing is saved until you confirm on the next screen.</p>
+<section class="card" style="max-width:720px">
+  <p style="margin-top:0">Choose a <code>.vcf</code> file (vCard 2.1, 3.0 or 4.0). In Google Contacts: <em>Export → vCard (for iOS Contacts)</em>. On iPhone: Contacts → Lists → long-press → Export.</p>
   <form method="post" enctype="multipart/form-data" class="row">
     <input type="file" name="file" accept=".vcf,text/vcard,text/x-vcard" required>
-    <div class="shrink"><button type="submit">Preview</button></div>
+    <div class="shrink"><button type="submit">{{ icon('upload') }}Preview</button></div>
   </form>
 </section>
 
@@ -28,24 +28,24 @@
 {% set dupes = ok|selectattr('duplicates')|list %}
 <form method="post" action="/import/confirm">
   <input type="hidden" name="token" value="{{ token }}">
-  <section class="panel">
-    <p><strong>{{ items|length }}</strong> contact(s) found{% if dupes %}, <strong>{{ dupes|length }}</strong> look like duplicates (unticked){% endif %}{% if items|length - ok|length %}, <strong>{{ items|length - ok|length }}</strong> can't be imported{% endif %}.
+  <section class="card">
+    <p style="margin-top:0"><strong>{{ items|length }}</strong> contact(s) found{% if dupes %}, <strong>{{ dupes|length }}</strong> look like duplicates (unticked){% endif %}{% if items|length - ok|length %}, <strong>{{ items|length - ok|length }}</strong> can't be imported{% endif %}.
       <button type="button" class="link" onclick="document.querySelectorAll('input[name=pick]:not(:disabled)').forEach(x=>x.checked=true)">tick all</button>
       · <button type="button" class="link" onclick="document.querySelectorAll('input[name=pick]').forEach(x=>x.checked=false)">untick all</button></p>
     {% if preview.errors %}
-    <details class="errors" open><summary>{{ preview.errors|length }} card(s) in the file couldn't be read and will be skipped</summary>
+    <details class="notice error" open><summary>{{ preview.errors|length }} card(s) in the file couldn't be read and will be skipped</summary>
       <ul class="small">{% for e in preview.errors %}<li>{{ e }}</li>{% endfor %}</ul></details>
     {% endif %}
-    <div style="margin:10px 0"><button type="submit">Import selected</button> <a class="btn secondary" href="/import">Cancel</a></div>
+    <div style="margin:10px 0"><div class="actions"><button type="submit">{{ icon('check') }}Import selected</button> <a class="btn secondary" href="/import">Start over</a></div></div>
     <div class="table-wrap">
     <table>
       <thead><tr><th></th><th>Name</th><th>Email</th><th>Notes</th></tr></thead>
       <tbody>
       {% for p in items %}
       <tr>
-        <td><input type="checkbox" name="pick" value="{{ p.index }}" style="width:auto"
+        <td><input type="checkbox" name="pick" value="{{ p.index }}" 
              {% if p.problem %}disabled{% elif not p.duplicates %}checked{% endif %}></td>
-        <td>{{ p.display_name }}{% if p.has_photo %} <span class="chip">photo</span>{% endif %}</td>
+        <td>{{ p.display_name }}{% if p.has_photo %} <span class="chip accent">photo</span>{% endif %}</td>
         <td class="small">{{ p.emails|join(', ') }}</td>
         <td class="small">
           {% if p.problem %}<span class="due">{{ p.problem }}</span>
@@ -57,7 +57,7 @@
     </table>
     </div>
   </section>
-  <button type="submit">Import selected</button> <a class="btn secondary" href="/import">Cancel</a>
+  <div class="actions"><button type="submit">{{ icon('check') }}Import selected</button> <a class="btn secondary" href="/import">Start over</a></div>
 </form>
 {% endif %}
 {% endblock %}

@@ -1,23 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Tags & groups{% endblock %}
+{% block title %}Circles{% endblock %}
 {% block body %}
-<h1>Tags &amp; groups</h1>
-<p class="muted">Tags are free labels; groups are for sets of people (family, a club, a team). Create them by tagging a contact.</p>
-<section class="panel table-wrap">
-  <table>
-    <thead><tr><th>Name</th><th>Kind</th><th>Contacts</th><th></th></tr></thead>
+<div class="page-head"><div>
+  <div class="eyebrow">{{ SERVICE.name }}</div>
+  <h1>Circles</h1>
+  <p class="lede">Loose labels (<em>tags</em>) and the groups people belong to (<em>groups</em>, like family or a club). They're created when you add them to someone.</p>
+</div></div>
+<section class="card" style="max-width:820px">
+  {% if tags %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th><th>Kind</th><th>People</th><th></th></tr></thead>
     <tbody>
     {% for t in tags %}
       <tr>
-        <td><form id="t{{ t.id }}" method="post" action="/tags/{{ t.id }}"><input name="name" value="{{ t.name }}"></form></td>
-        <td><select name="kind" form="t{{ t.id }}"><option {% if t.kind == 'tag' %}selected{% endif %}>tag</option><option {% if t.kind == 'group' %}selected{% endif %}>group</option></select></td>
-        <td><a href="/?tag={{ t.name|urlencode }}">{{ t.contacts }}</a></td>
-        <td class="row" style="flex-wrap:nowrap"><button form="t{{ t.id }}" class="shrink secondary">Save</button>
-          <form class="shrink" method="post" action="/tags/{{ t.id }}/delete" onsubmit="return confirm('Delete tag {{ t.name }}? Contacts keep everything else.')"><button class="link">delete</button></form>
-          <a class="shrink small" href="/export.vcf?tag={{ t.name|urlencode }}">export</a></td>
+        <td><form id="t{{ t.id }}" method="post" action="/tags/{{ t.id }}"><input name="name" value="{{ t.name }}" aria-label="Name" style="min-width:140px"></form></td>
+        <td><select name="kind" form="t{{ t.id }}" aria-label="Kind" style="width:auto"><option value="tag" {% if t.kind == 'tag' %}selected{% endif %}>tag</option><option value="group" {% if t.kind == 'group' %}selected{% endif %}>group</option></select></td>
+        <td><a class="chip accent" href="/?tag={{ t.name|urlencode }}">{{ t.contacts }}</a></td>
+        <td><div class="actions" style="flex-wrap:nowrap">
+          <button form="t{{ t.id }}" class="secondary">Save</button>
+          <a class="btn ghost" href="/export.vcf?tag={{ t.name|urlencode }}" title="Export this circle">{{ icon('download') }}</a>
+          <form method="post" action="/tags/{{ t.id }}/delete" onsubmit="return confirm('Delete the circle “{{ t.name }}”? The people in it stay.')"><button class="link xs">delete</button></form>
+        </div></td>
       </tr>
-    {% else %}<tr><td colspan="4" class="muted">No tags yet.</td></tr>{% endfor %}
+    {% endfor %}
     </tbody>
-  </table>
+  </table></div>
+  {% else %}
+  <div class="empty">{{ MARK|safe }}<div class="display">No circles yet</div><p class="small">Open someone and add a circle like “family” or “climbing”.</p></div>
+  {% endif %}
 </section>
 {% endblock %}

@@ -22,6 +22,14 @@ preferences). Save new durable learnings with `write_note`. This file covers *ho
 `web` and `mcp` are the same image (`app/Dockerfile`, build context = repo root).
 The user isn't in the `docker` group in older shells; use `sudo docker compose …` if `docker` is denied.
 
+## Brand (applies to every service, now and later)
+`brand/` is the shared identity: `BRAND.md` (principles, colour, type, voice — read it before any UI
+work), `cove.css` (tokens + components), `services.json` (one signal colour per service), `logo/`, `fonts/`.
+Web UIs serve it at `/brand`, set `<html data-service="<key>">`, and add components to `cove.css` rather than
+per-service CSS. Look: ink on paper, wide heavy Archivo headings, Martian Mono for data/labels, one bright
+signal colour per service used as solid blocks, crisp borders and hard offset shadows. Avoid soft beige,
+pastel washes and blurred shadows (the user rejected that look as "too AI"). Copy stays warm and plain.
+
 ## Code map
 - `app/src/cove/crm/service.py` — **the only code that writes CRM data.** Web and MCP both call it, so
   validation (JSON Schema), optimistic locking (`version`) and audit logging (`meta.audit_log`, actor =
@@ -56,4 +64,5 @@ The user isn't in the `docker` group in older shells; use `sudo docker compose �
 - **Adding a new domain**: new schema migration (+ grants + `meta.domains` row), a `<domain>/service.py`
   following the CRM pattern (actor + audit + validation), MCP tools in `mcp_server.py`, web routes, and —
   if records are document-shaped — a JSON Schema in `schemas/` and a form template in `templates/`.
+  Give it a service key + colour pair in `brand/services.json` and follow `brand/BRAND.md` › Building a new service.
 - Never commit `.env`, `backups/`, or `*.vcf` (contact data).

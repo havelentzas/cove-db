@@ -1,0 +1,77 @@
+{
+  "_doc": "Registry of cove services. Each service owns ONE colour, as a pair: 'signal' (bright fill for blocks, badges, primary buttons; ink text on top) and 'text' (deeper shade for links/text on light backgrounds). All pairs pass WCAG AA. Set <html data-service=\"<key>\"> and cove.css does the rest. Add new services here AND in cove.css ([data-service] + .svc-dot).",
+  "core": {
+    "name": "cove",
+    "signal": "#17C3A5",
+    "text": "#0A6B5C",
+    "tone": "sea glass"
+  },
+  "services": [
+    {
+      "key": "people",
+      "name": "People",
+      "domain": "crm",
+      "signal": "#FF5B37",
+      "text": "#B9300F",
+      "tone": "vermilion",
+      "path": "/",
+      "status": "live",
+      "blurb": "The people you want to keep close."
+    },
+    {
+      "key": "move",
+      "name": "Move",
+      "domain": "fitness",
+      "signal": "#A4E03A",
+      "text": "#3C6A0C",
+      "tone": "lime",
+      "path": null,
+      "status": "planned",
+      "blurb": "Workouts, sleep and how you feel."
+    },
+    {
+      "key": "money",
+      "name": "Money",
+      "domain": "finance",
+      "signal": "#FFC22E",
+      "text": "#8A5800",
+      "tone": "marigold",
+      "path": null,
+      "status": "planned",
+      "blurb": "Where it comes from and where it goes."
+    },
+    {
+      "key": "journal",
+      "name": "Journal",
+      "domain": "journal",
+      "signal": "#A68CFF",
+      "text": "#5638C2",
+      "tone": "violet",
+      "path": null,
+      "status": "planned",
+      "blurb": "Thoughts worth keeping."
+    },
+    {
+      "key": "home",
+      "name": "Home",
+      "domain": "home",
+      "signal": "#3EC5F2",
+      "text": "#09698B",
+      "tone": "pool blue",
+      "path": null,
+      "status": "planned",
+      "blurb": "The things that keep the house running."
+    },
+    {
+      "key": "reading",
+      "name": "Reading",
+      "domain": "media",
+      "signal": "#FF78B6",
+      "text": "#AE1F66",
+      "tone": "flamingo",
+      "path": null,
+      "status": "planned",
+      "blurb": "Books, films and what stayed with you."
+    }
+  ]
+}
