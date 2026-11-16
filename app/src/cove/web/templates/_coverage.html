@@ -1,0 +1,7 @@
+{#- Say which services a cross-service answer couldn't include (coverage.missing). -#}
+{% macro coverage(cov) %}{% if cov and cov.missing %}
+<p class="coverage" role="note">
+  {% for m in cov.missing %}<span class="gap" title="{{ m.reason|replace('_', ' ') }}">{{ m.service }}: {{ {'disabled': 'turned off', 'not_installed': 'not installed', 'no_permission': 'not shared with you', 'error': 'had a problem', 'timeout': 'too slow'}.get(m.reason, m.reason) }}</span>{% endfor %}
+  {% if cov.missing|selectattr('service', 'equalto', 'people')|list %}<span>senders show as numbers and emails</span>{% endif %}
+</p>
+{% endif %}{% endmacro %}

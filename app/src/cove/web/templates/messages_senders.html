@@ -1,0 +1,64 @@
+{% extends "messages_base.html" %}
+{% from "_coverage.html" import coverage %}
+{% block title %}Senders{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">Messages</div>
+  <h1>Senders</h1>
+  <p class="lede">Who's behind each number, email and WhatsApp name. Phone numbers and emails that match one person link by themselves; names are only suggestions until you confirm them.</p>
+</div>
+{% if can_write %}<form method="post" action="/messages/senders/rematch" class="shrink">{{ csrf_field() }}<button class="secondary" type="submit">{{ icon('link') }}Match again</button></form>{% endif %}
+</div>
+<nav class="tabs" aria-label="Which senders">
+  {% for key, label in [('suggested', 'To confirm · ' ~ counts.to_confirm), ('none', 'Unknown · ' ~ counts.unresolved), ('linked', 'Linked'), ('me', 'You'), ('', 'Everyone')] %}
+  <a href="?state={{ key }}" {% if state == key %}aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+<form method="get" class="row" style="margin:var(--s3) 0 var(--s4)"><input type="hidden" name="state" value="{{ state }}">
+  <div><label for="sq">Find</label><input id="sq" name="q" value="{{ q }}" placeholder="number, email or name"></div>
+  <div class="shrink"><button class="secondary" type="submit">Find</button></div></form>
+{{ coverage(res.coverage) }}
+{% if not contacts and can_write %}<div class="notice">People isn't available to you here, so senders can't be linked to contacts right now. Everything else works.</div>{% endif %}
+{% if contacts %}<datalist id="people-list">{% for c in contacts %}<option value="{{ c.display_name }}"></option>{% endfor %}</datalist>{% endif %}
+{% if res['items'] %}
+<div class="table-wrap"><table class="senders">
+  <thead><tr><th>Sender</th><th>Messages</th><th>Person</th></tr></thead>
+  <tbody>
+  {% for h in res['items'] %}
+  <tr>
+    <td><strong>{{ h.label }}</strong>{% if h.label != h.value %}<div class="mono xs muted">{{ h.value }}</div>{% endif %}<div class="mono xs muted">{{ h.platform }}{% if h.is_me %} · you{% endif %}</div></td>
+    <td class="small">{{ h.messages }}{% if h.last_at %}<div class="xs muted">{{ h.last_at|d }}</div>{% endif %}</td>
+    <td>
+      {% if h.contact_ref %}
+        <span class="chip accent">{{ h.label }}</span> <span class="xs muted">{{ 'you linked' if h.resolution == 'manual' else 'matched by ' ~ ('number or email') }}</span>
+        {% if can_write %}<form method="post" action="/messages/senders/{{ h.handle_id }}" class="inline">{{ csrf_field() }}<input type="hidden" name="state" value="{{ state }}"><button class="link xs" name="action" value="unlink">unlink</button></form>{% endif %}
+      {% elif can_write and not h.is_me %}
+        {% for s in h.suggestions %}
+        <form method="post" action="/messages/senders/{{ h.handle_id }}" class="suggestion">{{ csrf_field() }}
+          <input type="hidden" name="contact" value="{{ s.ref }}"><input type="hidden" name="state" value="{{ state }}">
+          <span class="small">{{ s.label }}?</span>
+          <button class="secondary" name="action" value="link" type="submit">{{ icon('check') }}Yes</button>
+          <button class="ghost" name="action" value="dismiss" type="submit">No</button>
+        </form>
+        {% endfor %}
+        {% if contacts %}
+        <form method="post" action="/messages/senders/{{ h.handle_id }}" class="row link-form">{{ csrf_field() }}
+          <input type="hidden" name="state" value="{{ state }}"><input type="hidden" name="action" value="link">
+          <div><label class="sr-only" for="c-{{ h.handle_id }}">Link to</label>
+            <input id="c-{{ h.handle_id }}" name="contact" list="people-list" placeholder="Link to… (type a name)" required></div>
+          <div class="shrink"><button class="secondary" type="submit">Link</button></div>
+        </form>
+        {% endif %}
+        <form method="post" action="/messages/senders/{{ h.handle_id }}" class="inline">{{ csrf_field() }}<input type="hidden" name="state" value="{{ state }}"><button class="link xs" name="action" value="me">this is me</button></form>
+      {% elif h.is_me and can_write %}
+        <form method="post" action="/messages/senders/{{ h.handle_id }}" class="inline">{{ csrf_field() }}<input type="hidden" name="state" value="{{ state }}"><button class="link xs" name="action" value="not-me">not me</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<div class="empty"><div class="display">{% if state == 'suggested' %}Nothing to confirm{% else %}No senders here{% endif %}</div><p class="small">{% if state == 'suggested' %}New WhatsApp names and unmatched numbers show up here.{% endif %}</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "messages_base.html" %}
+{% from "_coverage.html" import coverage %}
+{% block title %}Messages{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Messages</div>
+    <h1>Conversations</h1>
+    <p class="lede">{{ stats.messages }} messages in {{ stats.conversations }} conversations.{% if stats.to_confirm %} <a href="/messages/senders">{{ stats.to_confirm }} sender{{ 's' if stats.to_confirm != 1 }} to confirm</a>.{% endif %}</p>
+  </div>
+</div>
+
+<form class="search" method="get" action="/messages" role="search">
+  {{ icon('search') }}<input name="q" value="{{ q }}" placeholder="Search messages and people…" aria-label="Search messages">
+</form>
+<form method="get" action="/messages" class="row filters" style="margin:var(--s3) 0 var(--s5)">
+  <input type="hidden" name="q" value="{{ q }}">
+  <div><label for="f-person">Person</label><input id="f-person" name="person" value="{{ person }}" placeholder="name, number or email"></div>
+  <div class="shrink"><label for="f-platform">Where</label><select id="f-platform" name="platform"><option value="">anywhere</option>{% for p in platforms %}<option value="{{ p }}" {% if p == platform %}selected{% endif %}>{{ PLATFORMS[p] }}</option>{% endfor %}</select></div>
+  <div class="shrink"><label for="f-since">Active since</label><input id="f-since" type="date" name="since" value="{{ since }}"></div>
+  <label class="toggle-chip shrink"><input type="checkbox" name="unresolved" value="true" {% if unresolved %}checked{% endif %}>Unknown senders</label>
+  <label class="toggle-chip shrink"><input type="checkbox" name="archived" value="true" {% if archived %}checked{% endif %}>Archived too</label>
+  <div class="shrink"><button class="secondary" type="submit">Filter</button></div>
+</form>
+{% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+{{ coverage(convs.coverage) }}
+
+{% if hits and hits['items'] %}
+<section class="card">
+  <h2>{{ icon('search') }} Messages matching “{{ q }}”</h2>
+  <ul class="list hits">
+  {% for m in hits['items'] %}
+    <li><a class="list-item" href="/messages/c/{{ m.conversation_id }}?around={{ m.id }}#m-{{ m.id }}">
+      <span class="grow"><strong class="small">{{ m.conversation.title }}</strong>
+        <span class="mono xs muted"> · {{ 'you' if m.is_from_me else m.sender.label }} · {{ m.sent_at|dt }}</span>
+        <span class="excerpt">{% if m.is_sensitive %}<span class="chip">one-time code</span>{% else %}{{ (m.body or '')|truncate(180) }}{% endif %}</span></span></a></li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if convs['items'] %}
+<ul class="list convs">
+  {% for c in convs['items'] %}
+  <li><a class="list-item conv" href="{{ c.url }}">
+    <span class="avatar {{ 'signal' if c.kind == 'group' }}">{{ c.title|initials }}</span>
+    <span class="grow">
+      <span class="title">{{ c.title }}</span>
+      <span class="sub">{{ PLATFORMS.get(c.platform, c.platform) }}{% if c.kind == 'group' %} · {{ c.participants|map(attribute='label')|join(', ')|truncate(90) }}{% endif %}</span>
+    </span>
+    <span class="meta">{{ c.message_count }} message{{ 's' if c.message_count != 1 }}<br>{{ c.last_message_at|dt }}</span>
+    {% if c.unresolved %}<span class="chip unresolved" title="Senders not linked to anyone in People">{{ c.unresolved }} unknown</span>{% endif %}
+    {% if not c.agent_visible %}<span class="chip" title="Agents can't see this conversation">hidden from agents</span>{% endif %}
+    {% if c.archived %}<span class="chip">archived</span>{% endif %}
+  </a></li>
+  {% endfor %}
+</ul>
+{% if convs.next_cursor %}<p><a class="btn secondary" href="?q={{ q|urlencode }}&person={{ person|urlencode }}&platform={{ platform }}&since={{ since }}{% if unresolved %}&unresolved=true{% endif %}{% if archived %}&archived=true{% endif %}&cursor={{ convs.next_cursor }}">Older conversations</a></p>{% endif %}
+{% else %}
+<div class="empty">
+  {{ MARK|safe }}
+  <div class="display">{% if q or person or platform or since or unresolved %}Nothing matches that{% else %}No messages yet{% endif %}</div>
+  <p class="small">{% if q or person or platform or since or unresolved %}Try fewer filters.{% else %}Connect the iMessage collector on your Mac, or upload a WhatsApp export, under <a href="/messages/settings">Settings</a>.{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

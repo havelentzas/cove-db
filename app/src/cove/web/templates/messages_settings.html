@@ -1,0 +1,108 @@
+{% extends "messages_base.html" %}
+{% block title %}Messages settings{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">Messages · settings</div>
+  <h1>Settings</h1>
+  <p class="lede">Where your messages come from, what agents may see, and how to bring in more.</p>
+</div></div>
+{% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+{% if imported %}<div class="notice" role="status" style="display:block"><strong>Imported “{{ imported.title or 'chat' }}”.</strong>
+  {{ imported.accepted }} new, {{ imported.duplicates }} already here{% if imported.rejected %}, {{ imported.rejected }} skipped{% endif %}. Senders: {{ imported.senders|join(', ') }}.
+  {% if imported.accepted %}<a href="/messages/senders">Confirm who's who</a>.{% endif %}</div>{% endif %}
+{% if new_token %}
+<div class="notice" role="status" style="display:block">
+  <strong>Ingest token for “{{ new_token.name }}”: copy it now, it won't be shown again.</strong>
+  <div class="copyline" style="margin:var(--s3) 0 0"><code id="tok">{{ new_token.token }}</code><button class="secondary" type="button" data-copy-from="tok">Copy</button></div>
+  <p class="xs muted" style="margin:var(--s2) 0 0">It can only send messages in. It can't read anything back. On the Mac, <code>install.sh</code> asks for it and keeps it in the Keychain.</p>
+</div>
+{% endif %}
+
+<div class="grid">
+<div>
+  <section class="card">
+    <h2>{{ icon('download') }} Sources</h2>
+    {% if sources %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Source</th><th>Messages</th><th>Last heard from</th></tr></thead>
+      <tbody>{% for s in sources %}
+      <tr><td><strong>{{ s.label }}</strong><div class="mono xs muted">{{ s.key }} · {{ s.collector or '' }}</div></td>
+        <td class="small">{{ s.messages }} in {{ s.conversations }}</td>
+        <td class="small">{% if s.last_ingest_at %}{{ s.last_ingest_at|dt }}{% else %}never{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="small muted" style="margin:0">Nothing has come in yet. Set up the Mac collector or upload a WhatsApp export.</p>{% endif %}
+  </section>
+
+  <section class="card" id="whatsapp">
+    <h2>{{ icon('upload') }} Import a WhatsApp chat</h2>
+    <p class="small" style="margin-top:0">In WhatsApp, open the chat › tap its name › <b>Export chat</b> › <b>Without media</b>, and upload the file you get (.zip or .txt). Importing a newer export of the same chat later only adds what's new.</p>
+    {% if can_ingest %}
+    <form method="post" action="/messages/import/whatsapp" enctype="multipart/form-data">{{ csrf_field() }}
+      <div class="row">
+        <div style="flex-basis:100%"><label for="wa-file">Export file</label><input id="wa-file" type="file" name="file" accept=".zip,.txt" required></div>
+        <div><label for="wa-me">Your name in WhatsApp</label><input id="wa-me" name="my_name" value="{{ settings.whatsapp_name or '' }}" placeholder="as it appears in the export"></div>
+        <div><label for="wa-title">Chat name <span class="muted">(optional)</span></label><input id="wa-title" name="title" placeholder="from the file name"></div>
+      </div>
+      <div style="margin-top:var(--s3)"><button class="secondary" type="submit">{{ icon('upload') }}Import</button></div>
+    </form>
+    {% else %}<p class="small muted">You need the messages:ingest permission to import.</p>{% endif %}
+    <p class="xs muted" style="margin-bottom:0">cove never connects to WhatsApp itself: no unofficial apps or bridges.</p>
+  </section>
+
+  <section class="card">
+    <h2>{{ icon('shield') }} What agents can see</h2>
+    <p class="small" style="margin-top:0">Agents only see Messages if you tick “Read your message archive” on their token under <a href="/settings/agents">Agents</a>. Even then they never see the conversations below or one-time codes.</p>
+    {% if hidden %}
+    <ul class="list">{% for c in hidden %}
+      <li class="list-item" style="padding:var(--s2) 0"><span class="grow"><a href="{{ c.url }}">{{ c.title }}</a> <span class="mono xs muted">{{ c.platform }}</span></span>
+        {% if can_write %}<form method="post" action="/messages/c/{{ c.id }}/agents">{{ csrf_field() }}<input type="hidden" name="visible" value="true"><input type="hidden" name="back" value="/messages/settings"><button class="link xs">show to agents</button></form>{% endif %}</li>
+    {% endfor %}</ul>
+    {% else %}<p class="small muted">No conversations are hidden yet.</p>{% endif %}
+    {% if can_write and recent %}
+    <details><summary class="small">Hide a recent conversation</summary>
+      <ul class="list">{% for c in recent %}
+        <li class="list-item" style="padding:var(--s1) 0"><span class="grow small">{{ c.title }}</span>
+          <form method="post" action="/messages/c/{{ c.id }}/agents">{{ csrf_field() }}<input type="hidden" name="visible" value="false"><input type="hidden" name="back" value="/messages/settings"><button class="link xs">hide from agents</button></form></li>
+      {% endfor %}</ul>
+    </details>
+    {% endif %}
+  </section>
+</div>
+
+<aside>
+  <section class="card accent">
+    <h2>{{ icon('key') }} Mac collector</h2>
+    <p class="small" style="margin-top:0">Create an ingest token, then run <code>collectors/imessage/install.sh</code> on your Mac (see its README). It sends new iMessages and SMS every 10 minutes.</p>
+    {% if can_ingest %}
+    <form method="post" action="/messages/settings/tokens">{{ csrf_field() }}
+      <label for="tname">Name</label><input id="tname" name="name" required placeholder="my mac">
+      <div style="margin-top:var(--s3)"><button type="submit">{{ icon('plus') }}Create ingest token</button></div>
+    </form>
+    {% endif %}
+    {% if tokens %}
+    <ul class="list xs" style="margin-top:var(--s4)">{% for t in tokens %}
+      <li class="list-item" style="padding:var(--s1) 0;{% if t.revoked_at %}opacity:.5{% endif %}"><span class="grow"><strong>{{ t.name }}</strong> · used {{ t.last_used_at|dt or 'never' }}</span>
+        {% if not t.revoked_at %}<form method="post" action="/messages/settings/tokens/{{ t.id }}/revoke" data-confirm="Revoke {{ t.name }}? That collector stops sending at once.">{{ csrf_field() }}<button class="link xs">revoke</button></form>{% else %}<span class="chip">revoked</span>{% endif %}</li>
+    {% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Filters</h2>
+    {% if owner %}
+    <form method="post" action="/messages/settings">{{ csrf_field() }}
+      <label class="toggle-chip" style="margin-bottom:var(--s3)"><input type="checkbox" name="otp_filter" value="true" {% if settings.otp_filter %}checked{% endif %}>Hide one-time codes from agents</label>
+      <label for="region">Country for numbers without +</label>
+      <input id="region" name="default_region" value="{{ settings.default_region or '' }}" maxlength="2" placeholder="NL" style="max-width:7em">
+      <label for="wname">Your name in WhatsApp exports</label>
+      <input id="wname" name="whatsapp_name" value="{{ settings.whatsapp_name or '' }}">
+      <div style="margin-top:var(--s3)"><button class="secondary" type="submit">Save</button></div>
+    </form>
+    {% else %}
+    <p class="small muted" style="margin:0">One-time codes are {{ 'hidden from' if settings.otp_filter else 'shown to' }} agents. Only the owner can change this.</p>
+    {% endif %}
+  </section>
+</aside>
+</div>
+{% endblock %}

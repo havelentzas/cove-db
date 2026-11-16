@@ -95,6 +95,8 @@
       <form id="rhythm-off" method="post" action="/contacts/{{ c.id }}/follow-up">{{ csrf_field() }}<input type="hidden" name="every_days" value=""></form>
     </section>
 
+    {% if messages_panel %}{% include "_panel_messages.html" %}{% endif %}
+
     <section class="card">
       <h2>{{ icon('tag') }} Circles</h2>
       <form method="post" action="/contacts/{{ c.id }}/tags">{{ csrf_field() }}

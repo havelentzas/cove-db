@@ -21,6 +21,8 @@ from cove.messages import service as svc
 from cove.messages.normalize import handle_value, is_name_handle
 
 KEY = "messages"
+PLATFORM_NAMES = {"imessage": "iMessage", "sms": "SMS", "rcs": "RCS", "whatsapp": "WhatsApp", "signal": "Signal",
+                  "telegram": "Telegram"}
 
 
 def _ids(refs: list[str], kind: str) -> list[uuid.UUID]:
@@ -133,7 +135,7 @@ def timeline(subject_ref: str | None = None, since: str | None = None, until: st
         cv = svc._conv_out(convs[r["id"]], parts.get(r["id"], []), names)
         theirs = r["n"] - r["mine"]
         items.append({"ref": cv["ref"], "service": KEY, "kind": "messages.day", "occurred_at": svc._iso(r["last_at"]),
-                      "title": f"{cv['title']}: {r['n']} message{'s' if r['n'] != 1 else ''} on {cv['platform']} "
+                      "title": f"{cv['title']}: {r['n']} message{'s' if r['n'] != 1 else ''} on {PLATFORM_NAMES.get(cv['platform'], cv['platform'])} "
                                f"({r['mine']} from you, {theirs} from them)",
                       "excerpt": (r["last_body"] or "")[:200] or None,
                       "participants": sorted({p["contact_ref"] or p["handle_ref"] for p in cv["participants"]}),

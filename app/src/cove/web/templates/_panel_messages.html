@@ -1,0 +1,26 @@
+{#- The Messages panel on a contact page. Rendered only when Messages answered through the fabric
+    (cove.web.panels); otherwise it isn't there at all. -#}
+{% set P = messages_panel %}
+<section class="card integration" aria-labelledby="msg-panel-h">
+  <h2 id="msg-panel-h"><span class="svc-dot" data-svc="messages" aria-hidden="true"><span class="dot"></span></span> Messages</h2>
+  {% if P.last %}
+  <dl class="fields compact">
+    <dt>You wrote</dt><dd>{{ P.last.last_outbound|dt or '—' }}</dd>
+    <dt>They wrote</dt><dd>{{ P.last.last_inbound|dt or '—' }}</dd>
+    {% if P.last.channel %}<dt>On</dt><dd>{{ PLATFORMS.get(P.last.channel, P.last.channel) }}</dd>{% endif %}
+  </dl>
+  {% endif %}
+  {% for w in P.waiting %}
+  <a class="waiting" href="{{ w.url }}">{{ icon('chat') }} Waiting on your reply since {{ w.last_inbound_at|dt }}</a>
+  {% endfor %}
+  {% if P.recent %}
+  <ul class="list compact-list">
+    {% for i in P.recent %}
+    <li><a href="{{ i.url }}"><span class="when mono xs">{{ i.occurred_at|d }}</span> <span class="small">{{ i.title }}</span></a></li>
+    {% endfor %}
+  </ul>
+  {% elif not P.last %}
+  <p class="small muted" style="margin:0">No messages linked to {{ c.display_name.split(' ')[0] }} yet. If you've written to each other, link their number or name under <a href="/messages/senders">Messages › Senders</a>.</p>
+  {% endif %}
+  {% if P.partial %}<p class="coverage" style="margin-top:var(--s3)"><span class="gap">some of Messages didn't answer in time</span></p>{% endif %}
+</section>

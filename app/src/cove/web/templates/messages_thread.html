@@ -1,0 +1,60 @@
+{% extends "messages_base.html" %}
+{% from "_coverage.html" import coverage %}
+{% set C = t.conversation %}
+{% block title %}{{ C.title }}{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block body %}
+<div class="page-head thread-head">
+  <div style="flex:1 1 320px">
+    <a class="small muted" href="/messages" style="text-decoration:none">{{ icon('arrow-left') }} Conversations</a>
+    <h1>{{ C.title }}</h1>
+    <div class="who">
+      {% for p in C.participants %}
+        {% if p.contact_ref and p.contact_ref.startswith('cove:people/contact/') %}<a class="chip" href="/contacts/{{ p.contact_ref.split('/')[-1] }}">{{ p.label }}</a>{% else %}<a class="chip unresolved" href="/messages/senders?state=&q={{ p.value|urlencode }}" title="Not linked to anyone in People">{{ p.label }}</a>{% endif %}
+      {% endfor %}
+      <span class="eyebrow">{{ PLATFORMS.get(C.platform, C.platform) }} · {{ C.message_count }} message{{ 's' if C.message_count != 1 }}</span>
+    </div>
+  </div>
+  <div class="actions">
+    <form method="get" action="" class="jump"><label class="sr-only" for="jump">Jump to date</label><input id="jump" type="date" name="date" value="{{ date }}"><button class="secondary" type="submit">Go</button></form>
+    {% if can_write %}
+    <form method="post" action="/messages/c/{{ C.id }}/agents">{{ csrf_field() }}<input type="hidden" name="visible" value="{{ 'false' if C.agent_visible else 'true' }}">
+      <button class="{{ 'secondary' if C.agent_visible else '' }}" type="submit" title="{{ 'Agents can read this conversation' if C.agent_visible else 'Agents can’t see this conversation' }}">{{ icon('shield') }}{{ 'Hide from agents' if C.agent_visible else 'Show to agents' }}</button></form>
+    <form method="post" action="/messages/c/{{ C.id }}/archive">{{ csrf_field() }}<input type="hidden" name="archived" value="{{ 'false' if C.archived else 'true' }}"><button class="ghost" type="submit">{{ 'Unarchive' if C.archived else 'Archive' }}</button></form>
+    {% endif %}
+  </div>
+</div>
+{% if not C.agent_visible %}<div class="notice" role="status">Hidden from agents. Only you see this conversation.</div>{% endif %}
+{{ coverage(t.coverage) }}
+
+{% if t.has_before and t.messages %}<p class="older"><a class="btn secondary" href="?around={{ t.messages[0].id }}&before=100">{{ icon('arrow-left') }} Earlier messages</a></p>{% endif %}
+<div class="thread">
+{% for d in days %}
+  <div class="day-sep" id="d-{{ d.day }}"><span>{{ d.day.strftime('%A %-d %B %Y') }}</span></div>
+  {% for m in d.messages %}
+  <div class="msg {{ 'me' if m.is_from_me else 'them' }} kind-{{ m.kind }} {{ 'focus' if m.id == around }}" id="m-{{ m.id }}">
+    {% if m.kind == 'system' %}
+      <div class="sys small muted">{{ m.body or 'Conversation update' }} · {{ m.sent_at|dt }}</div>
+    {% else %}
+    {% if not m.is_from_me and C.kind == 'group' %}<div class="from mono xs">{{ m.sender.label }}</div>{% endif %}
+    <div class="bubble">
+      {% if m.retracted %}<span class="muted small"><em>Unsent</em></span>
+      {% elif m.is_sensitive %}<details class="sensitive"><summary><span class="chip">one-time code</span> hidden from agents · show</summary><div class="text">{{ m.body }}</div></details>
+      {% else %}
+        {% if m.body %}<div class="text">{{ m.body }}</div>{% endif %}
+        {% for a in m.attachments %}<div class="att mono xs">{{ icon('download') }} {{ a.filename or 'media' }}{% if a.size %} · {{ (a.size / 1024)|round(1) }} KB{% endif %}</div>{% endfor %}
+        {% if m.kind == 'attachment' and not m.attachments %}<div class="att mono xs">media not included in the export</div>{% endif %}
+        {% if m.kind == 'call' %}<div class="att mono xs">{{ icon('chat') }} call</div>{% endif %}
+      {% endif %}
+    </div>
+    <div class="meta mono xs"><a href="#m-{{ m.id }}" title="Link to this message">{{ m.sent_at|dt }}</a>{% if m.edited_at %} · edited{% endif %}</div>
+    {% if m.reactions %}<div class="reactions">{% for r in m.reactions %}<span class="chip" title="{{ r.by }}">{{ r.emoji or {'love': '♥', 'like': '👍', 'dislike': '👎', 'laugh': 'ha', 'emphasize': '!!', 'question': '?'}.get(r.type, r.type) }} {{ r.by }}</span>{% endfor %}</div>{% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="empty"><div class="display">Nothing here yet</div></div>
+{% endfor %}
+</div>
+{% if t.has_after and t.messages %}<p class="older"><a class="btn secondary" href="?around={{ t.messages[-1].id }}">Later messages</a></p>{% endif %}
+{% endblock %}

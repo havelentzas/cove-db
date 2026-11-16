@@ -50,6 +50,7 @@ Every pair passes WCAG AA (≥ 4.5:1) in both themes. The source of truth is `se
 | Move (fitness) | `move` | `#A4E03A` | `#3C6A0C` | lime |
 | Money (finance) | `money` | `#FFC22E` | `#8A5800` | marigold |
 | Notes (notes, ideas, journal) | `notes` | `#A68CFF` | `#5638C2` | violet |
+| Messages (iMessage, SMS, WhatsApp) | `messages` | `#5B8CFF` | `#1F4FD1` | cobalt |
 | Home | `home` | `#3EC5F2` | `#09698B` | pool blue |
 | Reading (media) | `reading` | `#FF78B6` | `#AE1F66` | flamingo |
 

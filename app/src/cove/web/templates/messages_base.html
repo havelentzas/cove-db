@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{#- Messages pages share this nav. -#}
+{% block nav %}
+  {% set p = request.url.path %}
+  <a href="/messages" {% if p == '/messages' or p.startswith('/messages/c/') %}aria-current="page"{% endif %}>Conversations</a>
+  <a href="/messages/waiting" {% if p.startswith('/messages/waiting') %}aria-current="page"{% endif %}>Needs a reply</a>
+  <a href="/messages/senders" {% if p.startswith('/messages/senders') %}aria-current="page"{% endif %}>Senders</a>
+  <a href="/messages/settings" {% if p.startswith('/messages/settings') %}aria-current="page"{% endif %}>Settings</a>
+{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}<a href="/" class="muted" style="text-decoration:none">{{ icon('arrow-left') }} All services</a>{% endblock %}

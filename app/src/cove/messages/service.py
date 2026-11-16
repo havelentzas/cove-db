@@ -420,8 +420,8 @@ def awaiting_reply(days: int = 14, limit: int = 20, person: str | None = None, r
         elif refs:
             hids = [r["id"] for r in c.execute("SELECT id FROM messages.handles WHERE contact_ref = ANY(%s)",
                                                 (list(refs),)).fetchall()]
-        if hids is not None:
-            filt = "AND c.id IN (SELECT conversation_id FROM messages.conversation_handles WHERE handle_id = ANY(%(hids)s))"
+        if hids is not None:   # about these people: threads where one of them wrote last
+            filt = "AND l.sender_handle_id = ANY(%(hids)s)"
             params["hids"] = hids
         rows = c.execute(f"""SELECT c.*, l.id AS last_id, l.sent_at AS waiting_since, l.body AS last_body,
                                     l.sender_handle_id AS last_sender, l.is_sensitive AS last_sensitive

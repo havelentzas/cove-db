@@ -30,6 +30,17 @@
       "blurb": "Workouts, sleep and how you feel."
     },
     {
+      "key": "messages",
+      "name": "Messages",
+      "domain": "messages",
+      "signal": "#5B8CFF",
+      "text": "#1F4FD1",
+      "tone": "cobalt",
+      "path": "/messages",
+      "status": "live",
+      "blurb": "Your iMessage, SMS and WhatsApp history, so you remember what you talked about."
+    },
+    {
       "key": "money",
       "name": "Money",
       "domain": "finance",

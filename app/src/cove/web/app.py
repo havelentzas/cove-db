@@ -20,7 +20,8 @@ from jinja2 import pass_context
 
 from cove import brand, context
 from cove.auth import policy
-from cove.web import agents, api_v1, auth, hub, messages_api, notes_api, notes_web, security, services_web
+from cove.web import (agents, api_v1, auth, hub, messages_api, messages_web, notes_api, notes_web, panels,
+                      security, services_web)
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -35,7 +36,9 @@ people = APIRouter(tags=["people"], dependencies=[api_v1.service_on("people")]) 
 pages = Jinja2Templates(directory=HERE / "templates")
 pages.env.globals.update(INTERACTION_KINDS=svc.INTERACTION_KINDS, RELATION_TYPES=svc.RELATION_TYPES,
                          SERVICE=brand.service("people"), SERVICES=brand.registry()["services"],
-                         MARK=brand.mark_svg())
+                         MARK=brand.mark_svg(),
+                         PLATFORMS={"imessage": "iMessage", "sms": "SMS", "rcs": "RCS", "whatsapp": "WhatsApp",
+                                    "signal": "Signal", "telegram": "Telegram", "other": "Other"})
 pages.env.globals["csrf_field"] = pass_context(auth.csrf_field)
 
 
@@ -257,6 +260,7 @@ def contact_detail(request: Request, cid: str):
         "c": c, "sections": _detail_sections(_template(), c["card"]), "others": others,
         "audit": svc.audit_trail(c["id"], 15), "all_tags": svc.list_tags(),
         "photo": next((m["uri"] for m in (c["card"].get("media") or {}).values() if m.get("kind") == "photo"), None),
+        "messages_panel": panels.messages_for_contact(c["id"]),   # None when Messages isn't available: no panel
     })
 
 
@@ -461,6 +465,7 @@ app.include_router(api_v1.meta_router)
 app.include_router(api_v1.people_router)
 app.include_router(api_v1.notes_router)
 app.include_router(messages_api.router)
+app.include_router(messages_web.router)
 
 
 @app.get("/healthz")

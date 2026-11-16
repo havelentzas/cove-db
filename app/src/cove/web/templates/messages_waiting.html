@@ -1,0 +1,25 @@
+{% extends "messages_base.html" %}
+{% from "_coverage.html" import coverage %}
+{% block title %}Needs a reply{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">Messages</div>
+  <h1>Needs a reply</h1>
+  <p class="lede">Conversations where someone wrote last in the past {{ days }} days and you haven't answered yet. Longest wait first.</p>
+</div></div>
+{{ coverage(res.coverage) }}
+{% if res['items'] %}
+<ul class="list convs">
+  {% for c in res['items'] %}
+  <li><a class="list-item conv" href="{{ c.url }}?around={{ c.last_message_id }}#m-{{ c.last_message_id }}">
+    <span class="avatar signal">{{ c.title|initials }}</span>
+    <span class="grow"><span class="title">{{ c.title }}</span>
+      <span class="sub">{{ c.last_from }}: {{ (c.last_body or 'sent something')|truncate(160) }}</span></span>
+    <span class="meta">waiting since<br>{{ c.waiting_since|dt }}</span>
+  </a></li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="empty">{{ MARK|safe }}<div class="display">You're all caught up</div><p class="small">Nobody's waiting on you{% if days < 60 %}. <a href="?days=60">Look further back</a>{% endif %}.</p></div>
+{% endif %}
+{% endblock %}
