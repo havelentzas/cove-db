@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create throwaway secrets
         run: sh scripts/init-secrets.sh && cp .env.example .env
       - name: Build
@@ -29,7 +29,7 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       - name: pip-audit (Python lockfile)
         working-directory: app
@@ -50,7 +50,7 @@ jobs:
         aquasec/trivy:0.67.2@sha256:e2b22eac59c02003d8749f5b8d9bd073b62e30fefaef5b7c8371204e0a4b0c08
         image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: sh scripts/init-secrets.sh && cp .env.example .env && docker compose build migrate dbinit
       - name: Scan cove-app
