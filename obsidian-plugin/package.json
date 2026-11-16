@@ -10,7 +10,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.6",
     "builtin-modules": "^4.0.0",
     "esbuild": "^0.25.0",
     "obsidian": "^1.8.0",
