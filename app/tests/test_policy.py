@@ -20,8 +20,9 @@ def test_every_service_function_is_guarded():
     from cove.fabric import aggregate, core, events, services
     from cove.notes import fabric as notes_fabric
     from cove.messages import fabric as messages_fabric, ingest, service as messages
+    from cove.messages.importers import whatsapp
     for module in (svc, notes, core, services, events, aggregate, people_fabric, notes_fabric, messages,
-                   messages_fabric, ingest):
+                   messages_fabric, ingest, whatsapp):
         assert policy.unguarded(module) == [], module.__name__
 
 

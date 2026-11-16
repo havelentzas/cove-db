@@ -40,6 +40,27 @@ async def ingest_batch(request: Request) -> dict:
     return await run_in_threadpool(ingest.ingest_batch, batch, _actor(request))
 
 
+@router.post("/ingest/whatsapp")
+async def ingest_whatsapp(request: Request) -> dict:
+    """Import a WhatsApp "Export chat" file (.txt or .zip) as multipart form data: `file`, and optionally
+    `my_name` (how you appear in the export), `title` and `date_order` (DMY, MDY or YMD). Re-importing a
+    newer export of the same chat only adds what's new."""
+    from starlette.concurrency import run_in_threadpool
+    from cove.messages.importers import whatsapp
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        raise Invalid("attach the export as the `file` field")
+    data = await upload.read()
+    await form.close()
+    order = (str(form.get("date_order") or "").upper() or None)
+    if order not in (None, "DMY", "MDY", "YMD"):
+        raise Invalid("date_order must be DMY, MDY or YMD")
+    return await run_in_threadpool(whatsapp.import_export, upload.filename or "chat.txt", data, _actor(request),
+                                   str(form.get("my_name") or "").strip() or None,
+                                   str(form.get("title") or "").strip() or None, order)
+
+
 @router.get("/ingest/state")
 def ingest_state(source: str = Query(..., min_length=1, max_length=100)) -> dict:
     """Where a collector left off: the `high_water` it sent with its last successful batch."""

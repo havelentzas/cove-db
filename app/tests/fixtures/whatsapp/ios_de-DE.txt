@@ -1,0 +1,4 @@
+[02.04.24, 18:00:01] Jona Beispiel: Hallo! Kommst du morgen?
+[02.04.24, 18:03:12] Sam Example: Ja, gern.
+[13.04.24, 07:59:59] Jona Beispiel: ‎<angehängt: 00000010-AUDIO-2024-04-13-07-59-59.opus>
+[13.04.24, 08:00:00] Jona Beispiel: Diese Nachricht wurde gelöscht.
