@@ -18,7 +18,9 @@ public: never commit hostnames, emails, tokens or personal data. See `SECURITY.m
 | service  | what | where |
 |---|---|---|
 | postgres | `pgvector/pgvector:pg17`, volume `cove_pgdata` | 127.0.0.1:5432, db `cove` (+ `cove_test`) |
-| migrate  | dbmate, runs `db/migrations/*.sql` then exits | — |
+| migrate  | dbmate: `db/migrations` → `cove`, then `db/control` → `cove_control`, then exits | — |
+| dbinit   | `db/roles.sh`: login roles (passwords from secrets) and databases, idempotent; runs before every migrate | — |
+| pocket-id | Pocket ID (passkey OIDC provider), state in its own `pocketid` database | 127.0.0.1:1411, tailnet :9443 |
 | web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` (hostname: see `CLAUDE.local.md`) |
 | mcp      | MCP SDK 2.x `MCPServer`, streamable HTTP (`cove.mcp_server`) | http://127.0.0.1:8765/mcp, and on the tailnet at `https://<host>:8443/mcp` (host allow-list: `COVE_MCP_EXTRA_HOSTS`) |
 | backup   | nightly encrypted (age) dump + attachments → `./backups`, restore drill, 14-day retention (`docs/backups.md`) | — |
@@ -48,6 +50,11 @@ pastel washes and blurred shadows (the user rejected that look as "too AI"). Cop
 - `app/src/cove/crm/vcard.py` — JSContact ⇄ vCard (RFC 9555 subset). vCard import 3.0/4.0, export 4.0.
 - `app/src/cove/templating.py` — generic path-based form templates (domain-agnostic).
 - `app/src/cove/mcp_server.py` — thin async MCP adapter over the service layer.
+- **Sign-in** (`docs/auth.md`): `web/auth.py` is a deny-by-default middleware (session + CSRF on every
+  route except `PUBLIC_PATHS`/`PUBLIC_PREFIXES`), plus `/login`, `/auth/*`, `/account`, `/admin`.
+  `auth/oidc.py` (code flow + PKCE against Pocket ID), `auth/sessions.py` (server-side sessions in
+  `cove_control`), `control/identity.py` (users, identities, security events). Every POST form needs
+  `{{ csrf_field() }}` (a test checks). Tests: the `browser` fixture / `conftest.Browser` is a signed-in client.
 - `app/src/cove/web/` — routes (`app.py`), Jinja templates, vendored `htmx.min.js`.
 - `schemas/jscontact-card.schema.json` — validation for cards. `templates/contact-default.json` — the
   contact form, driven entirely by this file.
@@ -71,13 +78,16 @@ The home page (`web/hub.py`) builds its catalog from these, so nothing is hand-m
 
 ## Roles
 `cove_owner` (migrations, superuser) · `cove_app` (web+mcp; RW `crm.*`, `meta.agent_notes`; INSERT-only
-`meta.audit_log`) · `cove_readonly` (`sql_query` tool; read-only session, 5s timeout).
+`meta.audit_log`; in `cove_control`: RW users/identities/sessions, INSERT-only security_events) ·
+`cove_readonly` (`sql_query` tool; read-only session, 5s timeout) · `pocketid` (owns only the `pocketid` database).
+CONNECT is granted per database (`db/roles.sh`).
 Secrets (DB passwords, token pepper, session key) are Docker secrets in `./secrets/*.txt` (git-ignored; dir 700),
 read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` holds only non-secret settings.
 
 ## Common tasks
 - Rebuild & restart: `docker compose up -d --build`
 - Tests: `docker compose --profile test run --rm test` (uses `cove_test`, resets schemas per test)
+- Identity schema change: `db/control/NNN_name.sql` (database `cove_control`, schema `control`).
 - Schema change: add `db/migrations/NNN_name.sql`, insert a row into `meta.changelog` in the same
   migration, grant to roles, then `docker compose run --rm migrate`.
 - **Adding a new domain**: new schema migration (+ grants + `meta.domains` row), a `<domain>/service.py`

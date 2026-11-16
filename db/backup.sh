@@ -1,12 +1,15 @@
 #!/bin/sh
-# Nightly encrypted backup of the cove database and note attachments, with a restore drill.
+# Nightly encrypted backup of cove's databases, note attachments and secrets, with a restore drill.
 #
+#   For each database in BACKUP_DATABASES (cove, cove_control, pocketid):
 #   1. pg_dump into tmpfs (memory) — plaintext never touches disk
 #   2. restore drill: restore that dump into a scratch database and compare row counts with the live one
-#   3. encrypt to the age recipients in COVE_BACKUP_AGE_RECIPIENTS → /backups/cove-<ts>.dump.age
+#   3. encrypt to the age recipients in COVE_BACKUP_AGE_RECIPIENTS → /backups/<db>-<ts>.dump.age
+#   Then:
 #   4. encrypt any new attachment blobs → /backups/blobs/aa/bb/<sha256>.age (content-addressed, so
 #      existing files never change and off-site sync only uploads new ones)
-#   5. retention, and a one-line result in /backups/STATUS
+#   5. encrypt ./secrets → /backups/secrets-<ts>.tar.age (DB passwords, token pepper, Pocket ID's key)
+#   6. retention, and a one-line result in /backups/STATUS
 #
 # The private key is kept off this machine (docs/backups.md): this host can write backups but not read them.
 # BACKUP_ONCE=1 runs one cycle and exits non-zero on failure (CI, manual runs).
@@ -39,7 +42,7 @@ drill() { # $1 = dump file; restores it into $DRILL_DB and checks it against the
   dropdb "$DRILL_DB"
   if cmp -s "$WORK/before" "$WORK/after"; then
     cmp -s "$WORK/before" "$WORK/restored" || { diff "$WORK/before" "$WORK/restored" >&2; return 1; }
-    DRILL="exact ($(wc -l < "$WORK/restored") tables, $(awk '{s+=$2} END {print s}' "$WORK/restored") rows)"
+    DRILL="exact ($(wc -l < "$WORK/restored") tables, $(awk '{s+=$2} END {print s+0}' "$WORK/restored") rows)"
   else
     # data changed while dumping, so exact counts can't be compared; require the same tables
     cut -d' ' -f1 "$WORK/before" > "$WORK/t1"; cut -d' ' -f1 "$WORK/restored" > "$WORK/t2"
@@ -53,16 +56,22 @@ encrypt() { # $1 = source, $2 = destination; atomic so a crash never leaves a ha
   age $RECIPIENTS -o "$2.tmp" "$1" && mv "$2.tmp" "$2"
 }
 
+backup_db() { # $1 = database
+  rm -rf "$WORK" && mkdir -p "$WORK" && chmod 700 "$WORK"
+  counts "$1" > "$WORK/before" || return 1
+  pg_dump -Fc -d "$1" -f "$WORK/db.dump" || { log "dump FAILED: $1"; return 1; }
+  counts "$1" > "$WORK/after" || return 1
+  drill "$WORK/db.dump" || { log "restore drill FAILED: $1-$ts"; return 1; }
+  encrypt "$WORK/db.dump" "/backups/$1-$ts.dump.age" || { log "encryption FAILED: $1"; return 1; }
+  rm -rf "$WORK"
+  log "backup ok: $1-$ts.dump.age; restore drill: $DRILL"
+  DRILLS="$DRILLS $1=[$DRILL]"
+}
+
 cycle() {
   ts=$(date +%Y%m%d-%H%M%S)
-  rm -rf "$WORK" && mkdir -p "$WORK" && chmod 700 "$WORK"
-  counts cove > "$WORK/before" || return 1
-  pg_dump -Fc -f "$WORK/cove.dump" || { log "dump FAILED"; return 1; }
-  counts cove > "$WORK/after" || return 1
-  drill "$WORK/cove.dump" || { log "restore drill FAILED for cove-$ts"; return 1; }
-  encrypt "$WORK/cove.dump" "/backups/cove-$ts.dump.age" || { log "encryption FAILED"; return 1; }
-  rm -rf "$WORK"
-  log "backup ok: cove-$ts.dump.age; restore drill: $DRILL"
+  DRILLS=""
+  for d in ${BACKUP_DATABASES:-cove}; do backup_db "$d" || return 1; done
 
   new=0
   if [ -d /blobs ]; then
@@ -77,9 +86,15 @@ cycle() {
     log "blobs: $new new"
   fi
 
-  find /backups -maxdepth 1 -name 'cove-*.dump.age' -mtime +"${BACKUP_RETENTION_DAYS:-14}" -delete
+  if [ -d /cove-secrets ]; then
+    tar -C /cove-secrets -cf "/tmp/secrets.tar" . && encrypt /tmp/secrets.tar "/backups/secrets-$ts.tar.age"
+    rc=$?; rm -f /tmp/secrets.tar; [ $rc = 0 ] || { log "secrets encryption FAILED"; return 1; }
+  fi
+
+  find /backups -maxdepth 1 \( -name '*-*.dump.age' -o -name 'secrets-*.tar.age' \) \
+    -mtime +"${BACKUP_RETENTION_DAYS:-14}" -delete
   find /backups -name '*.age.tmp' -delete
-  echo "ok $(date -u +%FT%TZ) cove-$ts.dump.age drill=$DRILL blobs_new=$new" > /backups/STATUS
+  echo "ok $(date -u +%FT%TZ) $ts drills:$DRILLS blobs_new=$new" > /backups/STATUS
 }
 
 while true; do

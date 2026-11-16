@@ -15,8 +15,12 @@ Please **don't open a public issue.** Use GitHub's private vulnerability reporti
   so the git history was left as is.)
 
 ## Security model (current)
-- **Network:** the web UI and MCP server listen on localhost only and are published to a private Tailscale
-  tailnet. There are no inbound ports on the host.
+- **Network:** the web UI, MCP server and sign-in service listen on localhost only and are published to a
+  private Tailscale tailnet. There are no inbound ports on the host.
+- **Sign-in:** passkeys only, through a self-hosted Pocket ID (invite-only, user verification required).
+  The web UI is deny-by-default: server-side sessions (`__Host-` cookie, HMAC-stored tokens, 7-day idle and
+  30-day absolute limits), CSRF tokens on every form, and an admin page with a security event log.
+  See `docs/auth.md`. The MCP server isn't behind sign-in yet (scoped tokens are next).
 - **Sync API:** `/api/notes/*` requires per-device bearer tokens. They are shown once, stored hashed, and
   revocable at `/settings/devices`.
 - **Data integrity:**
@@ -34,7 +38,6 @@ Please **don't open a public issue.** Use GitHub's private vulnerability reporti
 
 ## In progress
 A security overhaul is underway:
-- passkey sign-in through a self-hosted OIDC provider
 - a separate database per workspace
 - scoped tokens and OAuth 2.1 for MCP
 

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Your account{% endblock %}
+{% block nav %}<a href="/">Services</a><a href="/account" aria-current="page">Account</a>{% if me.is_admin %}<a href="/admin">Admin</a>{% endif %}{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">cove · account</div>
+  <h1>{{ me.display_name or me.username }}</h1>
+  <p class="lede">Where you're signed in, and what's happened on your account lately.</p>
+</div></div>
+<div class="grid">
+  <div>
+    <section class="card">
+      <div class="actions" style="justify-content:space-between;margin-bottom:var(--s3)">
+        <h2>Signed in on {{ sessions|length }} {{ 'device' if sessions|length == 1 else 'devices' }}</h2>
+        {% if sessions|length > 1 %}
+        <form method="post" action="/account/sessions/revoke-others" data-confirm="Sign out everywhere except this browser?">{{ csrf_field() }}<button class="secondary" type="submit">Sign out other devices</button></form>
+        {% endif %}
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Browser</th><th>Signed in</th><th>Last active</th><th></th></tr></thead>
+        <tbody>
+        {% for s in sessions %}
+        <tr>
+          <td><strong class="small">{{ (s.user_agent or 'unknown browser')|truncate(60) }}</strong>
+            <div class="xs muted mono">{{ s.ip or '' }}{% if s.id == me.session_id %} · this browser{% endif %}</div></td>
+          <td class="small">{{ s.created_at|d }}</td>
+          <td class="small">{{ s.last_seen_at|dt }}</td>
+          <td>{% if s.id != me.session_id %}
+            <form method="post" action="/account/sessions/{{ s.id }}/revoke">{{ csrf_field() }}<button class="link xs">sign out</button></form>
+          {% else %}<span class="chip accent">current</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+    <section class="card">
+      <h2 style="margin-bottom:var(--s3)">Recent activity</h2>
+      {% if events %}
+      <ul class="timeline">
+        {% for e in events %}
+        <li><div class="when">{{ e.at|dt }}{% if e.ip %} · {{ e.ip }}{% endif %}</div>
+          <div class="small">{{ e.kind|replace('_', ' ') }}{% if e.detail.reason %} — {{ e.detail.reason }}{% endif %}</div></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="small muted" style="margin:0">Nothing yet.</p>{% endif %}
+    </section>
+  </div>
+  <aside>
+    <section class="card accent">
+      <h2>{{ icon('key') }} Passkeys</h2>
+      <p class="small">Your passkeys live with the sign-in service. Keep at least two (say, your phone and a laptop) so losing one device never locks you out.</p>
+      {% if auth_url %}<a class="btn" href="{{ auth_url }}/settings/account" target="_blank" rel="noopener">Manage passkeys</a>{% endif %}
+    </section>
+    <section class="card">
+      <h2>{{ icon('logout') }} Sign out</h2>
+      <form method="post" action="/auth/logout">{{ csrf_field() }}
+        <label class="toggle-chip" style="margin:var(--s3) 0"><input type="checkbox" name="everywhere" value="true">Everywhere, not just here</label>
+        <div><button class="secondary" type="submit">Sign out</button></div>
+      </form>
+    </section>
+  </aside>
+</div>
+{% endblock %}

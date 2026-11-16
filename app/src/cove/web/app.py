@@ -13,9 +13,10 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse,
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
 
 from cove import brand
-from cove.web import hub, notes_api, notes_web, security
+from cove.web import auth, hub, notes_api, notes_web, security
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -31,6 +32,7 @@ pages = Jinja2Templates(directory=HERE / "templates")
 pages.env.globals.update(INTERACTION_KINDS=svc.INTERACTION_KINDS, RELATION_TYPES=svc.RELATION_TYPES,
                          SERVICE=brand.service("people"), SERVICES=brand.registry()["services"],
                          MARK=brand.mark_svg())
+pages.env.globals["csrf_field"] = pass_context(auth.csrf_field)
 
 
 def _initials(name: str) -> str:
@@ -43,12 +45,17 @@ def _initials(name: str) -> str:
 pages.env.filters["initials"] = _initials
 
 
-def _who(actor: str) -> str:
-    """Friendly audit actor: 'web:me@x' -> 'you', 'mcp:claude-code' -> 'agent (claude-code)'."""
+@pass_context
+def _who(ctx, actor: str) -> str:
+    """Friendly audit actor: your own 'web:<you>' -> 'you', 'web:<someone>' -> 'someone',
+    'mcp:claude-code' -> 'agent (claude-code)'."""
     actor = actor or ""
     suffix = " · import" if actor.endswith(":import") else ""
     if actor.startswith("web"):
-        return "you" + suffix
+        name = actor.removesuffix(":import").partition(":")[2]
+        request = ctx.get("request")
+        me = getattr(getattr(request, "state", None), "user", None) if request is not None else None
+        return ("you" if not name or (me and name == me["username"]) else name) + suffix
     if actor.startswith("mcp:"):
         return f"agent ({actor[4:]})"
     if actor.startswith("device:"):
@@ -83,13 +90,9 @@ pages.env.globals["now_iso"] = lambda: datetime.now(timezone.utc).isoformat()
 pages.env.filters["d"] = _short_d
 
 
-app.middleware("http")(security.middleware)
-
-
-@app.middleware("http")
 async def same_origin_posts(request: Request, call_next):
-    """Reject cross-site form posts (the site has no login; this stops other web pages
-    from submitting forms to it through your browser)."""
+    """Reject cross-site form posts. A second line of defence next to the CSRF tokens checked in
+    cove.web.auth (other web pages can't submit forms through your browser)."""
     bearer = request.url.path.startswith("/api/") and request.headers.get("authorization", "").startswith("Bearer ")
     if request.method not in ("GET", "HEAD", "OPTIONS") and not bearer:   # token auth isn't CSRF-able
         origin = request.headers.get("origin") or request.headers.get("referer")
@@ -99,9 +102,17 @@ async def same_origin_posts(request: Request, call_next):
     return await call_next(request)
 
 
+# Registration order matters: the last one added runs first. Requests pass through
+# security (size, rate limits, headers) → same-origin check → sign-in + CSRF → the route.
+app.middleware("http")(auth.middleware)
+app.middleware("http")(same_origin_posts)
+app.middleware("http")(security.middleware)
+
+
 def actor(request: Request) -> str:
-    login = request.headers.get("tailscale-user-login")
-    return f"web:{login}" if login else "web"
+    """Audit actor for a web request: web:<username of the signed-in user>."""
+    user = getattr(request.state, "user", None)
+    return f"web:{user['username']}" if user else "web"
 
 
 def back(url: str, **params) -> RedirectResponse:
@@ -381,6 +392,7 @@ def invalid(request: Request, exc: svc.Invalid):
     return PlainTextResponse(f"Invalid input: {exc}", status_code=422)
 
 
+app.include_router(auth.router)
 app.include_router(people)
 app.include_router(hub.router)
 app.include_router(notes_web.router)

@@ -5,14 +5,19 @@ The server can write backups but can't read them, so a stolen disk or a compromi
 gives away nothing.
 
 ## What happens every night
-The `backup` service (`db/backup.sh`) has no internet access. Each night it:
-1. Dumps the `cove` database (`pg_dump -Fc`) into memory (tmpfs). The plaintext never touches disk.
+The `backup` service (`db/backup.sh`) has no internet access. Each night it does steps 1–3 for each
+database: `cove` (your data), `cove_control` (users and sessions) and `pocketid` (passkeys and the sign-in
+service):
+1. Dumps the database (`pg_dump -Fc`) into memory (tmpfs). The plaintext never touches disk.
 2. **Runs a restore drill:** it restores that dump into a scratch database (`cove_restore_drill`) and compares
    the row count of every table with the live database. If data changed while the dump ran, only the
    table list is compared. If the drill fails, no backup is written and `backups/STATUS` says `FAILED`.
-3. Encrypts the dump to `backups/cove-<timestamp>.dump.age`, and keeps 14 days of dumps.
+3. Encrypts the dump to `backups/<database>-<timestamp>.dump.age`, and keeps 14 days of dumps.
 4. Encrypts any new note attachments to `backups/blobs/aa/bb/<sha256>.age`. Attachments are
    content-addressed, so existing files never change and off-site sync only uploads new ones.
+
+It also encrypts `./secrets` to `backups/secrets-<timestamp>.tar.age`, so a rebuilt machine gets back
+the same database passwords, token pepper and Pocket ID key, and device tokens keep working.
 
 `backups/STATUS` holds one line describing the last run. You can also check `docker compose logs backup`.
 
@@ -43,9 +48,11 @@ All restores need the private key, `ID=/path/to/cove-backup-identity.txt`.
 ```sh
 scripts/restore.sh db "$ID"                     # newest dump → new database cove_restored
 scripts/restore.sh db "$ID" backups/cove-20261116-020000.dump.age cove_restored
+scripts/restore.sh db "$ID" backups/pocketid-20261116-020000.dump.age pocketid_restored
 scripts/restore.sh blobs "$ID" /tmp/blobs       # every attachment → /tmp/blobs/aa/bb/<sha256>
+scripts/restore.sh secrets "$ID" /tmp/secrets   # the newest secrets archive
 ```
-`restore.sh` never writes into the live `cove` database. To replace it:
+`restore.sh` never writes into a live database (`cove`, `cove_control`, `pocketid`). To replace it:
 ```sh
 docker compose stop web mcp backup
 docker compose exec postgres psql -U cove_owner -d postgres \

@@ -58,7 +58,7 @@ class RateLimiter:
         return True, 0
 
 
-LIMITS = {"api": 3000, "write": 240, "read": 1200}   # per client per minute
+LIMITS = {"api": 3000, "write": 240, "read": 1200, "auth": 30}   # per client per minute
 limiter = RateLimiter()
 
 
@@ -66,9 +66,6 @@ def client_key(request: Request) -> str:
     auth = request.headers.get("authorization", "")
     if auth.startswith("Bearer "):
         return "tok:" + hashlib.sha256(auth.encode()).hexdigest()[:16]
-    login = request.headers.get("tailscale-user-login")
-    if login:
-        return "ts:" + login
     return "ip:" + (request.client.host if request.client else "?")
 
 
@@ -80,7 +77,12 @@ async def middleware(request: Request, call_next):
         return PlainTextResponse("request too large", status_code=413)
     # 2) rate limits
     if not path.startswith(PUBLIC_ASSETS) and path != "/healthz":
-        bucket = "api" if path.startswith("/api/") else ("read" if request.method in ("GET", "HEAD") else "write")
+        if path == "/login" or path.startswith("/auth/"):
+            bucket = "auth"           # sign-in attempts: tight, per IP
+        elif path.startswith("/api/"):
+            bucket = "api"
+        else:
+            bucket = "read" if request.method in ("GET", "HEAD") else "write"
         ok, retry = limiter.allow(client_key(request), bucket, LIMITS[bucket])
         if not ok:
             return PlainTextResponse("too many requests, slow down", status_code=429, headers={"Retry-After": str(retry)})

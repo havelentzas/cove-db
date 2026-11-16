@@ -404,3 +404,27 @@ details > summary { cursor: pointer; font-weight: 600; }
   .shell-header .inner { gap: var(--s3); }
   .list-item .meta { display: none; }
 }
+
+/* ---------- Gate (sign-in) ------------------------------------------------ */
+.gate { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.gate::before { content: ""; position: fixed; inset: 0 0 auto 0; height: 5px; background: var(--signal); z-index: 1; }
+.gate-hero { padding: var(--s7) clamp(var(--s4), 6vw, 88px); display: flex; flex-direction: column; justify-content: space-between; gap: var(--s6); border-right: 1.5px solid var(--ink); }
+.gate-hero .display { font-size: clamp(44px, 7.4vw, 104px); line-height: .92; max-width: 9ch; }
+.gate-hero .display em { font-style: normal; background: var(--signal); color: var(--on-signal); padding: 0 .08em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.gate-hero .lede { color: var(--muted); max-width: 44ch; margin: var(--s4) 0 0; font-size: var(--fs-lg); }
+.gate-panel { display: flex; align-items: center; justify-content: center; padding: var(--s6) var(--s4); background: var(--bg-sunk); }
+.gate-card { width: 100%; max-width: 400px; background: var(--panel); border: 1.5px solid var(--ink); border-radius: var(--r-lg); box-shadow: 6px 6px 0 var(--ink); padding: var(--s6) var(--s5); }
+.gate-card .mark { width: 44px; height: 44px; color: var(--signal); display: block; margin-bottom: var(--s4); }
+.gate-card h1 { font-size: var(--fs-xl); margin-bottom: var(--s2); }
+.gate-card .btn { width: 100%; min-height: 52px; font-size: var(--fs-md); margin-top: var(--s5); }
+.gate-card .fine { margin: var(--s4) 0 0; font: 400 var(--fs-2xs)/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.gate-card .notice { margin: var(--s4) 0 0; }
+.user-menu { display: inline-flex; align-items: center; gap: var(--s2); }
+.user-menu a { font: 500 var(--fs-2xs)/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-decoration: none; padding: 8px; border-radius: var(--r-sm); }
+.user-menu a:hover, .user-menu a[aria-current="page"] { color: var(--ink); background: var(--bg-sunk); }
+.user-menu form { display: contents; }
+@media (max-width: 900px) {
+  .gate { grid-template-columns: 1fr; }
+  .gate-hero { border-right: 0; border-bottom: 1.5px solid var(--ink); padding-top: var(--s6); padding-bottom: var(--s5); }
+  .gate-hero .display { max-width: none; }
+}

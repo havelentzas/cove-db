@@ -9,8 +9,9 @@ IETF's JSON successor to vCard. vCard import and export follow [RFC 9555](https:
 so Google Contacts, iOS and other address books still work with it.
 
 ```
-postgres (pgvector/pg17) ── migrate (dbmate)
-   ├── web  :8080  FastAPI + HTMX ──┐
+postgres (pgvector/pg17) ── dbinit (roles, databases) ── migrate (dbmate)
+   ├── pocket-id :1411  passkey sign-in (OIDC)
+   ├── web  :8080  FastAPI + HTMX ──┐   signed-in sessions, CSRF
    ├── mcp  :8765  MCP (HTTP)  ─────┤── both use cove.crm.service (validation, versioning, audit log)
    ├── backup     nightly encrypted pg_dump + restore drill → ./backups
    └── offsite    (optional) restic copy of ./backups off-site
@@ -18,11 +19,15 @@ postgres (pgvector/pg17) ── migrate (dbmate)
 
 ## Setup
 ```sh
-cp .env.example .env          # then set strong passwords
+cp .env.example .env          # then set COVE_PUBLIC_URL / COVE_AUTH_URL
+scripts/init-secrets.sh       # random secrets in ./secrets
+scripts/init-backup-key.sh    # backup encryption key (move the private half off the machine)
 docker compose up -d --build
+scripts/setup-auth.py         # sign-in: OIDC client + group (docs/auth.md)
+scripts/setup-auth.py add-user <username> <email> --admin
 docker compose --profile test run --rm test
 ```
-- Web UI: http://127.0.0.1:8080. To reach it from other devices on your tailnet, run
+- Web UI: sign in with a passkey (`docs/auth.md`). To reach it from other devices on your tailnet, run
   `tailscale serve --bg --https=443 http://127.0.0.1:8080`.
 - MCP: `http://127.0.0.1:8765/mcp`. To reach it over your tailnet, set `COVE_MCP_EXTRA_HOSTS=<machine>.<tailnet>.ts.net` in `.env`
   and run `tailscale serve --bg --https=8443 http://127.0.0.1:8765`. `.mcp.json` registers it for Claude Code in this folder. To use it

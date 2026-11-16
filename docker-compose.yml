@@ -20,7 +20,7 @@ x-app: &app
   cpus: 2
   environment: &app-env
     COVE_TIMEZONE: ${COVE_TIMEZONE:-Europe/Amsterdam}
-  secrets: [app_password, readonly_password, token_pepper, session_key]
+  secrets: [app_password, readonly_password, token_pepper, session_key, oidc_client_secret]
   volumes:
     - notes_blobs:/data/blobs
   networks: [db, edge]
@@ -39,16 +39,33 @@ services:
       POSTGRES_USER: cove_owner
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: cove
-    secrets: [postgres_password, app_password, readonly_password]
+    secrets: [postgres_password]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init:/docker-entrypoint-initdb.d:ro
     networks: [db]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cove_owner -d cove"]
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # Roles and databases, idempotently (db/roles.sh); runs before every migration
+  dbinit:
+    <<: *hardened
+    image: cove-backup:latest
+    build:
+      context: .
+      dockerfile: infra/backup/Dockerfile
+    restart: "no"
+    read_only: true
+    secrets: [postgres_password, app_password, readonly_password, pocketid_db_password]
+    volumes:
+      - ./db/roles.sh:/roles.sh:ro
+    networks: [db]
+    entrypoint: ["sh", "/roles.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   migrate:
     image: amacneil/dbmate:2@sha256:b0c8a87bfef4f2819fdb0a68ca357a44d12fb90d23eca695fcfc3b7e159cb1c5
@@ -62,10 +79,11 @@ services:
     volumes:
       - ./db:/db:ro
     networks: [db]
-    entrypoint: ["sh", "-c", 'DATABASE_URL="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432/cove?sslmode=disable" exec dbmate --wait up']
+    # data migrations (db/migrations → cove), then identity migrations (db/control → cove_control)
+    entrypoint: ["sh", "-c", 'set -e; U="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432"; DATABASE_URL="$$U/cove?sslmode=disable" dbmate --wait up; DATABASE_URL="$$U/cove_control?sslmode=disable" dbmate --migrations-dir /db/control up']
     depends_on:
-      postgres:
-        condition: service_healthy
+      dbinit:
+        condition: service_completed_successfully
 
   web:
     <<: *app
@@ -75,6 +93,10 @@ services:
     environment:
       <<: *app-env
       COVE_MCP_URLS: ${COVE_MCP_URLS:-http://127.0.0.1:8765/mcp}
+      COVE_PUBLIC_URL: ${COVE_PUBLIC_URL:-http://localhost:8080}       # where your browser reaches cove
+      COVE_AUTH_URL: ${COVE_AUTH_URL:-http://localhost:1411}           # where your browser reaches Pocket ID (= OIDC issuer)
+      COVE_AUTH_INTERNAL_URL: http://pocket-id:1411                    # server-to-server (token, keys)
+      COVE_OIDC_CLIENT_ID: cove
     command: ["uvicorn", "cove.web.app:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
     ports:
       - "127.0.0.1:8080:8080"
@@ -93,13 +115,48 @@ services:
       web:
         condition: service_started   # ensures the shared image is built first
 
+  # Pocket ID: passkey sign-in (OIDC provider). All state, including uploads, lives in its own
+  # Postgres database (pocketid), so there is no volume and it is covered by the nightly backup.
+  pocket-id:
+    <<: *hardened
+    image: ghcr.io/pocket-id/pocket-id:v2.19.3-distroless@sha256:6a0045a89b80fa6624c091786e7be132a4dde880ca64727a6b019c056b091982
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    mem_limit: 512m
+    environment:
+      APP_URL: ${COVE_AUTH_URL:-http://localhost:1411}
+      INTERNAL_APP_URL: http://pocket-id:1411
+      TRUST_PROXY: "true"
+      DB_CONNECTION_STRING_FILE: /run/secrets/pocketid_db_url
+      ENCRYPTION_KEY_FILE: /run/secrets/pocketid_encryption_key
+      STATIC_API_KEY_FILE: /run/secrets/pocketid_api_key    # admin API for scripts/setup-auth.sh
+      FILE_BACKEND: database
+      ANALYTICS_DISABLED: "true"
+      VERSION_CHECK_DISABLED: "true"
+      UI_CONFIG_DISABLED: "true"        # settings below come from here, not the admin UI
+      APP_NAME: cove
+      SESSION_DURATION: "60"            # minutes signed in at Pocket ID itself; cove keeps its own session
+      EMAILS_VERIFIED: "true"
+      ALLOW_OWN_ACCOUNT_EDIT: "true"
+      ALLOW_USER_SIGNUPS: disabled      # invite-only: users are created by an admin
+      WEBAUTHN_USER_VERIFICATION: required
+    secrets: [pocketid_db_url, pocketid_encryption_key, pocketid_api_key]
+    ports:
+      - "127.0.0.1:1411:1411"
+    networks: [db, edge]
+    healthcheck:
+      test: ["CMD", "/app/pocket-id", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      dbinit:
+        condition: service_completed_successfully
+
   # Nightly encrypted backup + restore drill (db/backup.sh, docs/backups.md). No internet access.
   backup:
     <<: *hardened
     image: cove-backup:latest
-    build:
-      context: .
-      dockerfile: infra/backup/Dockerfile
     user: "${COVE_BACKUP_UID:-1000}:${COVE_BACKUP_GID:-1000}"   # backup files belong to you, not root
     read_only: true
     tmpfs: ["/tmp:size=1g,mode=1777"]   # the plaintext dump only ever exists here, in memory
@@ -110,15 +167,17 @@ services:
       PGDATABASE: cove
       BACKUP_RETENTION_DAYS: "14"
       BACKUP_AGE_RECIPIENTS: ${COVE_BACKUP_AGE_RECIPIENTS:-}
+      BACKUP_DATABASES: cove cove_control pocketid
     secrets: [postgres_password]
     volumes:
       - ./backups:/backups
       - notes_blobs:/blobs:ro
+      - ./secrets:/cove-secrets:ro   # encrypted into the backup too, so a restore has everything
     networks: [db]
     entrypoint: ["sh", "/usr/local/lib/cove/backup.sh"]
     depends_on:
-      postgres:
-        condition: service_healthy
+      dbinit:
+        condition: service_completed_successfully
 
   # Off-site copy of ./backups with restic (db/offsite.sh). Internet access, no database access.
   # Enable with COMPOSE_PROFILES=offsite in .env once COVE_OFFSITE_REPOSITORY is set.
@@ -138,8 +197,8 @@ services:
     networks: [edge]
     entrypoint: ["sh", "/usr/local/lib/cove/offsite.sh"]
     depends_on:
-      backup:
-        condition: service_started   # ensures the shared image is built first
+      dbinit:
+        condition: service_completed_successfully   # ensures the shared image is built first
 
   # Test runner: docker compose --profile test run --rm test
   test:
@@ -154,8 +213,8 @@ services:
     networks: [db]
     command: ["sh", "-c", 'export COVE_TEST_DATABASE_URL="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432/cove_test"; exec pytest -q -p no:cacheprovider tests']
     depends_on:
-      postgres:
-        condition: service_healthy
+      dbinit:
+        condition: service_completed_successfully   # creates cove_test
 
 secrets:
   postgres_password: { file: ./secrets/postgres_password.txt }
@@ -165,6 +224,11 @@ secrets:
   session_key:       { file: ./secrets/session_key.txt }
   restic_password:   { file: ./secrets/restic_password.txt }
   offsite_env:       { file: ./secrets/offsite_env.txt }   # provider credentials, KEY=value lines (may be empty)
+  pocketid_db_password:    { file: ./secrets/pocketid_db_password.txt }
+  pocketid_db_url:         { file: ./secrets/pocketid_db_url.txt }
+  pocketid_encryption_key: { file: ./secrets/pocketid_encryption_key.txt }
+  pocketid_api_key:        { file: ./secrets/pocketid_api_key.txt }
+  oidc_client_secret:      { file: ./secrets/oidc_client_secret.txt }   # written by scripts/setup-auth.sh
 
 networks:
   db:

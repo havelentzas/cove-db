@@ -13,13 +13,13 @@
     <tbody>
     {% for t in tags %}
       <tr>
-        <td><form id="t{{ t.id }}" method="post" action="/tags/{{ t.id }}"><input name="name" value="{{ t.name }}" aria-label="Name" style="min-width:140px"></form></td>
+        <td><form id="t{{ t.id }}" method="post" action="/tags/{{ t.id }}">{{ csrf_field() }}<input name="name" value="{{ t.name }}" aria-label="Name" style="min-width:140px"></form></td>
         <td><select name="kind" form="t{{ t.id }}" aria-label="Kind" style="width:auto"><option value="tag" {% if t.kind == 'tag' %}selected{% endif %}>tag</option><option value="group" {% if t.kind == 'group' %}selected{% endif %}>group</option></select></td>
         <td><a class="chip accent" href="/people?tag={{ t.name|urlencode }}">{{ t.contacts }}</a></td>
         <td><div class="actions" style="flex-wrap:nowrap">
           <button form="t{{ t.id }}" class="secondary">Save</button>
           <a class="btn ghost" href="/export.vcf?tag={{ t.name|urlencode }}" title="Export this circle">{{ icon('download') }}</a>
-          <form method="post" action="/tags/{{ t.id }}/delete" data-confirm="Delete the circle “{{ t.name }}”? The people in it stay."><button class="link xs">delete</button></form>
+          <form method="post" action="/tags/{{ t.id }}/delete" data-confirm="Delete the circle “{{ t.name }}”? The people in it stay.">{{ csrf_field() }}<button class="link xs">delete</button></form>
         </div></td>
       </tr>
     {% endfor %}

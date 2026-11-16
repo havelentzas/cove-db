@@ -185,7 +185,8 @@ def test_sync_api(database, blobs):
     assert r.status_code == 201
     feed = c.get("/api/notes/changes?since=0", headers=H).json()
     assert {x["path"] for x in feed["changes"]} >= {"Hello.md", "doc.pdf"}
-    page = c.get(f"/notes/view/{f}")
+    from conftest import Browser
+    page = Browser().get(f"/notes/view/{f}")
     assert page.status_code == 200 and "Hello" in page.text
     assert "device (phone)" in page.text
 

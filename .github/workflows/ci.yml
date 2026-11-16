@@ -11,14 +11,14 @@ jobs:
       - name: Create throwaway secrets
         run: sh scripts/init-secrets.sh && cp .env.example .env
       - name: Build
-        run: docker compose build web backup
+        run: docker compose build web dbinit
       - name: Server tests
         run: docker compose --profile test run --rm test
       - name: Encrypted backup round trip (dump, restore drill, encrypt, decrypt + restore)
         run: |
           sh scripts/init-backup-key.sh "$RUNNER_TEMP/backup-key.txt"
           docker compose run --rm -e BACKUP_ONCE=1 backup
-          grep -q '^ok .*drill=exact' backups/STATUS
+          grep -q "^ok .*cove=\[exact" backups/STATUS
           ! ls backups/*.dump 2>/dev/null   # no plaintext dumps on disk
           sh scripts/restore.sh db "$RUNNER_TEMP/backup-key.txt"
       - name: Obsidian plugin integration tests
@@ -51,10 +51,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: sh scripts/init-secrets.sh && cp .env.example .env && docker compose build web backup
+        run: sh scripts/init-secrets.sh && cp .env.example .env && docker compose build web dbinit
       - name: Scan cove-app
         run: $TRIVY --exit-code 1 cove-app:latest
       - name: Scan cove-backup (excluding the restic binary)
         run: $TRIVY --exit-code 1 --skip-files usr/local/bin/restic cove-backup:latest
+      - name: Scan Pocket ID (the sign-in service; internet-facing later)
+        run: $TRIVY --exit-code 1 "$(docker compose config --images | grep pocket-id)"
       - name: Report restic (not blocking)
         run: $TRIVY --exit-code 0 cove-backup:latest

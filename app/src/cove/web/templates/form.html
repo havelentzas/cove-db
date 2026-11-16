@@ -30,7 +30,7 @@
   </div>
 </div>
 {% if errors %}<div class="notice error" role="alert">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
-<form method="post" style="max-width:760px">
+<form method="post" style="max-width:760px">{{ csrf_field() }}
   {% if contact %}<input type="hidden" name="version" value="{{ contact.version }}">{% endif %}
   {% for section in t.sections %}
   <section class="card">

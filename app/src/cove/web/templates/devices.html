@@ -26,7 +26,7 @@
         <td class="small">{{ t.created_at|d }}</td>
         <td class="small">{{ t.last_used_at|dt or 'never' }}</td>
         <td>{% if t.revoked_at %}<span class="chip">revoked</span>{% else %}
-          <form method="post" action="/settings/devices/{{ t.id }}/revoke" data-confirm="Revoke {{ t.name }}? It will stop syncing."><button class="link xs">revoke</button></form>{% endif %}</td>
+          <form method="post" action="/settings/devices/{{ t.id }}/revoke" data-confirm="Revoke {{ t.name }}? It will stop syncing.">{{ csrf_field() }}<button class="link xs">revoke</button></form>{% endif %}</td>
       </tr>
       {% endfor %}
       </tbody>
@@ -36,7 +36,7 @@
   <aside>
     <section class="card accent">
       <h2>Add a device</h2>
-      <form method="post" action="/settings/devices">
+      <form method="post" action="/settings/devices">{{ csrf_field() }}
         <label for="dname">Name</label>
         <input id="dname" name="name" required placeholder="laptop, iphone…">
         <div style="margin-top:var(--s3)"><button type="submit">{{ icon('plus') }}Create token</button></div>

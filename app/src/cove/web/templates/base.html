@@ -31,6 +31,11 @@
     {% endblock %}
     </nav>
     <span class="spacer"></span>
+    {% set U = request.state.user %}
+    {% if U %}<span class="user-menu">
+      <a href="/account" {% if path == '/account' %}aria-current="page"{% endif %} title="Your account and devices">{{ U.username }}</a>
+      {% if U.is_admin %}<a href="/admin" {% if path == '/admin' %}aria-current="page"{% endif %}>admin</a>{% endif %}
+    </span>{% endif %}
     <button class="ghost theme-toggle" type="button" data-theme-toggle aria-label="Switch light or dark theme" title="Light / dark">{{ icon('moon', 'moon') }}{{ icon('sun', 'sun') }}</button>
     {% block header_action %}<a class="btn" href="/contacts/new">{{ icon('plus') }}Add someone</a>{% endblock %}
   </div>

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block nav %}<a href="/">Services</a><a href="/account">Account</a><a href="/admin" aria-current="page">Admin</a>{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}{% endblock %}
+{% macro act(u, action, label, confirm='') -%}
+<form method="post" action="/admin/users/{{ u.id }}"{% if confirm %} data-confirm="{{ confirm }}"{% endif %}>{{ csrf_field() }}<input type="hidden" name="action" value="{{ action }}"><button class="link xs">{{ label }}</button></form>
+{%- endmacro %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">cove · admin</div>
+  <h1>People with access</h1>
+  <p class="lede">Accounts are created in the sign-in service (invite only); anyone in its <code>cove</code> group can sign in here. The first person to sign in became the admin.</p>
+</div>
+{% if auth_url %}<a class="btn secondary" href="{{ auth_url }}/settings/admin/users" target="_blank" rel="noopener">{{ icon('people') }}Invite someone</a>{% endif %}
+</div>
+<section class="card">
+  <div class="table-wrap"><table>
+    <thead><tr><th>Person</th><th>Role</th><th>Last sign-in</th><th>Sessions</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+    <tr {% if u.disabled_at %}style="opacity:.55"{% endif %}>
+      <td><strong>{{ u.display_name or u.username }}</strong><div class="xs muted mono">{{ u.username }}{% if u.email %} · {{ u.email }}{% endif %}</div></td>
+      <td>{% if u.disabled_at %}<span class="chip">disabled</span>{% elif u.is_admin %}<span class="chip accent">admin</span>{% else %}<span class="chip">member</span>{% endif %}</td>
+      <td class="small">{{ u.last_login_at|dt or 'never' }}</td>
+      <td class="small mono">{{ u.active_sessions }}</td>
+      <td><div class="actions">{% if u.id != me.id %}
+        {% if u.disabled_at %}{{ act(u, 'enable', 'enable') }}{% else %}{{ act(u, 'disable', 'disable', 'Disable ' ~ u.username ~ '? They are signed out everywhere at once.') }}{% endif %}
+        {% if u.is_admin %}{{ act(u, 'remove-admin', 'remove admin') }}{% else %}{{ act(u, 'make-admin', 'make admin', 'Make ' ~ u.username ~ ' an admin?') }}{% endif %}
+        {% if u.active_sessions %}{{ act(u, 'sign-out', 'sign out') }}{% endif %}
+      {% else %}<span class="xs muted">you</span>{% endif %}</div></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<section class="card">
+  <h2 style="margin-bottom:var(--s3)">{{ icon('shield') }} Security events</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>When</th><th>Event</th><th>Who</th><th>From</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+    <tr><td class="small mono">{{ e.at|dt }}</td><td class="small"><strong>{{ e.kind|replace('_', ' ') }}</strong></td>
+      <td class="small">{{ e.username or '—' }}</td><td class="xs mono muted">{{ e.ip or '' }}</td>
+      <td class="xs muted">{% for k, v in e.detail.items() if v not in (None, '') %}{{ k }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}</td></tr>
+    {% else %}<tr><td colspan="5" class="small muted">No events yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}

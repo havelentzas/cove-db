@@ -1,5 +1,6 @@
-"""Connection pools. ``COVE_DATABASE_URL`` (read/write app role) and
-``COVE_READONLY_URL`` (read-only role used for ad-hoc SQL)."""
+"""Connection pools. ``COVE_DATABASE_URL`` (read/write app role), ``COVE_READONLY_URL`` (read-only role
+used for ad-hoc SQL) and ``COVE_CONTROL_DATABASE_URL`` (cove_control: users, sessions, security events).
+Without the env vars, URLs are built from Docker secrets."""
 
 from __future__ import annotations
 
@@ -15,19 +16,24 @@ _pools: dict[str, ConnectionPool] = {}
 _urls: dict[str, str | None] = {}
 
 
-def configure(url: str, readonly_url: str | None = None) -> None:
-    """Point the module at specific databases (used by tests)."""
+ENV = {"rw": "COVE_DATABASE_URL", "ro": "COVE_READONLY_URL", "ctl": "COVE_CONTROL_DATABASE_URL"}
+
+
+def configure(url: str, readonly_url: str | None = None, control_url: str | None = None) -> None:
+    """Point the module at specific databases (used by tests; control tables then share `url`)."""
     close()
     _urls["rw"] = url
     _urls["ro"] = readonly_url or url
+    _urls["ctl"] = control_url or url
 
 
 def _pool(kind: str) -> ConnectionPool:
     if kind not in _pools:
-        url = _urls.get(kind) or os.environ.get("COVE_DATABASE_URL" if kind == "rw" else "COVE_READONLY_URL")
+        url = _urls.get(kind) or os.environ.get(ENV[kind])
         if not url:   # normal deployment: build it from Docker secrets
             from cove import secrets
-            url = secrets.database_url("cove_app" if kind == "rw" else "cove_readonly")
+            url = secrets.database_url("cove_readonly" if kind == "ro" else "cove_app",
+                                       "cove_control" if kind == "ctl" else None)
         if not url:
             raise RuntimeError(f"database URL for {kind!r} is not configured")
         # check=… validates each connection on checkout, so a Postgres restart never surfaces as a 500
@@ -46,6 +52,13 @@ def conn() -> Iterator[psycopg.Connection]:
 @contextmanager
 def ro_conn() -> Iterator[psycopg.Connection]:
     with _pool("ro").connection() as c:
+        yield c
+
+
+@contextmanager
+def ctl_conn() -> Iterator[psycopg.Connection]:
+    """A pooled connection to cove_control (identity and sessions); commits on success."""
+    with _pool("ctl").connection() as c:
         yield c
 
 

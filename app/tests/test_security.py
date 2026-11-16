@@ -8,8 +8,8 @@ def client():
     return TestClient(app, base_url="https://cove.test")
 
 
-def test_security_headers_and_no_store(database):
-    r = client().get("/people")
+def test_security_headers_and_no_store(browser):
+    r = browser.get("/people")
     assert r.status_code == 200
     h = r.headers
     assert "script-src 'self'" in h["content-security-policy"] and "unsafe-inline" not in h["content-security-policy"].split("script-src")[1].split(";")[0]
@@ -26,10 +26,10 @@ def test_request_size_limit(database):
     assert r.status_code == 413
 
 
-def test_rate_limit_returns_429_with_retry_after(monkeypatch, database):
+def test_rate_limit_returns_429_with_retry_after(monkeypatch, browser):
     monkeypatch.setattr(security, "limiter", security.RateLimiter())
     monkeypatch.setitem(security.LIMITS, "read", 5)
-    c = client()
+    c = browser
     codes = [c.get("/people").status_code for _ in range(7)]
     assert codes[:5] == [200] * 5 and codes[5] == 429
     assert int(c.get("/people").headers["retry-after"]) >= 1
