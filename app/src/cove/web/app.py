@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import json
+import secrets
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
@@ -274,25 +275,54 @@ def import_page(request: Request):
     return pages.TemplateResponse(request, "import.html", {"preview": None})
 
 
+def _decode(raw: bytes) -> str:
+    for enc in ("utf-8-sig", "cp1252"):  # older (2.1) exports are often Windows-1252
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+# Parsed uploads waiting for confirmation, kept server-side: posting every card (with photos)
+# back through a hidden form field would hit the 1 MB form-field limit for real address books.
+_PENDING: dict[str, tuple[float, list[dict]]] = {}
+_PENDING_TTL = 3600
+
+
+def _stash(cards: list[dict]) -> str:
+    now = time.time()
+    for k in [k for k, (t, _) in _PENDING.items() if now - t > _PENDING_TTL]:
+        del _PENDING[k]
+    token = secrets.token_urlsafe(16)
+    _PENDING[token] = (now, cards)
+    return token
+
+
 @app.post("/import", response_class=HTMLResponse)
 async def import_preview(request: Request, file: UploadFile):
-    raw = (await file.read()).decode("utf-8", errors="replace")
     try:
-        preview = svc.preview_import(raw)
+        preview = svc.preview_import(_decode(await file.read()))
     except svc.Invalid as e:
         return pages.TemplateResponse(request, "import.html", {"preview": None, "error": str(e)}, status_code=422)
-    return pages.TemplateResponse(request, "import.html", {
-        "preview": preview, "payload": json.dumps([p["card"] for p in preview]),
-    })
+    token = _stash([p["card"] for p in preview["items"]])
+    return pages.TemplateResponse(request, "import.html", {"preview": preview, "token": token})
 
 
-@app.post("/import/confirm")
+@app.post("/import/confirm", response_class=HTMLResponse)
 async def import_confirm(request: Request):
     form = await request.form()
-    cards = json.loads(form.get("payload", "[]"))
-    chosen = [cards[int(i)] for i in form.getlist("pick") if i.isdigit() and int(i) < len(cards)]
-    created = svc.import_cards(chosen, f"{actor(request)}:import")
-    return back("/", imported=str(len(created)))
+    pending = _PENDING.pop(str(form.get("token", "")), None)
+    if not pending:
+        return pages.TemplateResponse(request, "import.html", {
+            "preview": None, "error": "This preview expired (or the server restarted). Please upload the file again."},
+            status_code=410)
+    cards = pending[1]
+    chosen = [cards[int(i)] for i in form.getlist("pick") if str(i).isdigit() and int(i) < len(cards)]
+    result = svc.import_cards(chosen, f"{actor(request)}:import")
+    if result["failed"]:
+        return pages.TemplateResponse(request, "import.html", {"preview": None, "result": result})
+    return back("/", imported=str(len(result["created"])))
 
 
 @app.get("/export.vcf")

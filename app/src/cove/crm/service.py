@@ -538,12 +538,12 @@ def export_vcard(contact_ids: list[Any] | None = None, tag: str | None = None, i
     return "".join(vcard.card_to_vcard(r["card"], r["tags"], [tuple(x) for x in r["rels"]]) for r in rows)
 
 
-def preview_import(text: str) -> list[dict]:
-    """Parse vCards and flag likely duplicates (same email, phone, imported UID or exact name)."""
-    try:
-        cards = vcard.parse_vcards(text)
-    except Exception as e:  # vobject raises a variety of parse errors
-        raise Invalid(f"could not parse vCard data: {e}") from None
+def preview_import(text: str) -> dict:
+    """Parse vCards and flag likely duplicates (same email, phone, imported UID or exact name)
+    and cards that can't be saved. Returns {"items": [...], "errors": [unparseable cards]}."""
+    cards, errors = vcard.parse_vcards_detailed(text)
+    if not cards and not errors:
+        raise Invalid("no vCards found in the file (expected BEGIN:VCARD … END:VCARD blocks)")
     out = []
     with db.conn() as c:
         for i, card in enumerate(cards):
@@ -557,16 +557,27 @@ def preview_import(text: str) -> list[dict]:
                     WHERE emails && %s OR phones && %s OR lower(display_name) = lower(%s)
                        OR (card->>'cove.local:importedUid') = %s LIMIT 3""",
                 (emails, phones, name, card.get("cove.local:importedUid"))).fetchall()
+            try:
+                _normalize(card, uuid.uuid4())
+                problem = None
+            except Invalid as e:
+                problem = str(e)
             out.append({"index": i, "display_name": name, "card": card, "emails": emails,
-                        "duplicates": _plain(dups)})
-    return out
+                        "duplicates": _plain(dups), "problem": problem,
+                        "has_photo": any(m.get("kind") == "photo" for m in (card.get("media") or {}).values())})
+    return {"items": out, "errors": errors}
 
 
-def import_cards(cards: list[dict], actor: str) -> list[str]:
-    created = []
+def import_cards(cards: list[dict], actor: str) -> dict:
+    """Create contacts one by one; a bad card is reported, not fatal.
+    Returns {"created": [ids], "failed": ["name: reason"]}."""
+    created, failed = [], []
     for card in cards:
-        created.append(create_contact(card, actor)["id"])
-    return created
+        try:
+            created.append(create_contact(card, actor)["id"])
+        except (Invalid, NotFound) as e:
+            failed.append(f"{vcard.display_name(card)}: {e}")
+    return {"created": created, "failed": failed}
 
 
 # ================================================================== meta

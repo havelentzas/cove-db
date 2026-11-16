@@ -13,10 +13,14 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import re
 from typing import Any, Iterable
 
 import vobject
+
+# We report per-card errors ourselves; vobject otherwise logs every skipped line.
+logging.getLogger("vobject").setLevel(logging.CRITICAL)
 
 from cove.templating import date_from_form, date_to_form, new_id
 
@@ -193,13 +197,34 @@ def vcard_component_to_card(comp) -> dict:
     return card
 
 
-def parse_vcards(text: str) -> list[dict]:
-    """Parse one or more vCards (3.0 or 4.0) into JSContact cards."""
-    cards = []
-    for comp in vobject.readComponents(text, ignoreUnreadable=True):
-        if comp.name.upper() == "VCARD":
+_BLOCK_RE = re.compile(r"^BEGIN:VCARD[ \t]*$.*?^END:VCARD[ \t]*$", re.I | re.M | re.S)
+_FN_RE = re.compile(r"^FN[;:](?:[^:\n]*:)?(.*)$", re.I | re.M)
+
+
+def normalize_newlines(text: str) -> str:
+    """Accept CRLF, LF, bare CR and doubled CR (CRCRLF, produced by some export/transfer
+    tools). Without this, folded lines (e.g. base64 photos) are torn apart."""
+    return re.sub(r"\r+\n|\r", "\n", text.lstrip("﻿"))
+
+
+def parse_vcards_detailed(text: str) -> tuple[list[dict], list[str]]:
+    """Parse vCards one block at a time so a single malformed card doesn't sink the batch.
+    Returns (cards, errors)."""
+    cards, errors = [], []
+    for n, block in enumerate(_BLOCK_RE.findall(normalize_newlines(text)), 1):
+        fn = _FN_RE.search(block)
+        label = f"card #{n}" + (f" ({fn.group(1).strip()[:60]})" if fn else "")
+        try:
+            comp = vobject.readOne(block, ignoreUnreadable=True)
             cards.append(vcard_component_to_card(comp))
-    return cards
+        except Exception as e:  # vobject raises many exception types
+            errors.append(f"{label}: {str(e).splitlines()[0][:200] if str(e) else type(e).__name__}")
+    return cards, errors
+
+
+def parse_vcards(text: str) -> list[dict]:
+    """Parse one or more vCards (2.1/3.0/4.0) into JSContact cards, skipping malformed ones."""
+    return parse_vcards_detailed(text)[0]
 
 
 # ======================================================================= EXPORT

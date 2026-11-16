@@ -1,4 +1,4 @@
-from cove.crm.vcard import card_to_vcard, parse_vcards
+from cove.crm.vcard import card_to_vcard, parse_vcards, parse_vcards_detailed
 
 GOOGLE_V3 = """BEGIN:VCARD
 VERSION:3.0
@@ -59,3 +59,30 @@ def test_long_unicode_line_folds():
     text = card_to_vcard(card)
     assert all(len(line.encode()) <= 75 for line in text.split("\r\n"))
     assert parse_vcards(text)[0]["name"]["full"] == "Zoë " + "ü" * 80
+
+
+def _photo_card(eol: str, name: str = "Pic Person") -> str:
+    import base64, os
+    b64 = base64.b64encode(os.urandom(600)).decode()
+    lines = ["BEGIN:VCARD", "VERSION:3.0", f"FN:{name}", "PHOTO;ENCODING=b;TYPE=JPEG:" + b64[:48]]
+    lines += [" " + b64[i:i + 74] for i in range(48, len(b64), 74)]
+    lines += ["END:VCARD", ""]
+    return eol.join(lines)
+
+
+def test_doubled_carriage_returns_with_folded_photo():
+    # CR CR LF line endings tore folded base64 photos apart (real-world upload failure)
+    for eol in ("\r\n", "\n", "\r", "\r\r\n"):
+        cards, errors = parse_vcards_detailed(_photo_card(eol))
+        assert errors == [], eol
+        photo = next(iter(cards[0]["media"].values()))["uri"]
+        assert photo.startswith("data:image/jpeg;base64,") and len(photo) > 800, eol
+
+
+def test_bad_card_does_not_sink_batch():
+    bad = "BEGIN:VCARD\nVERSION:3.0\nFN:Broken\nBDAY;VALUE=date:\x00\x01garbage\nN:;;;\nEMAIL;TYPE=\"unterminated:x@y\nEND:VCARD\n"
+    text = _photo_card("\n", "First") + bad + _photo_card("\n", "Last")
+    cards, errors = parse_vcards_detailed(text)
+    names = [c["name"]["full"] for c in cards]
+    assert "First" in names and "Last" in names
+    assert len(cards) + len(errors) == 3

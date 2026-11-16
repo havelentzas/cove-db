@@ -77,10 +77,19 @@ def test_import_preview_flags_duplicates(database):
     mk("Grace Hopper", emails=["grace@navy.example"])
     vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:G. Hopper\r\nEMAIL:GRACE@navy.example\r\nEND:VCARD\r\n" \
           "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:New Person\r\nEND:VCARD\r\n"
-    prev = s.preview_import(vcf)
+    prev = s.preview_import(vcf)["items"]
     assert prev[0]["duplicates"] and not prev[1]["duplicates"]
-    s.import_cards([prev[1]["card"]], actor="import")
+    res = s.import_cards([prev[1]["card"]], actor="import")
+    assert len(res["created"]) == 1 and res["failed"] == []
     assert len(s.search_contacts()) == 2
+
+
+def test_import_flags_unsaveable_and_reports_failures(database):
+    vcf = "BEGIN:VCARD\r\nVERSION:3.0\r\nNOTE:no name at all\r\nEND:VCARD\r\n"
+    prev = s.preview_import(vcf)
+    assert prev["items"][0]["problem"]
+    res = s.import_cards([prev["items"][0]["card"]], actor="import")
+    assert res["created"] == [] and len(res["failed"]) == 1
 
 
 def test_notes_and_describe(database):
