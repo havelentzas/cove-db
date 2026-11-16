@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Ethos{% endblock %}
+{% block nav %}
+  <a href="/">Services</a>
+  {% for s in SERVICES if s.status == 'live' %}<a href="{{ s.path }}">{{ s.name }}</a>{% endfor %}
+  <a href="/ethos" aria-current="page">Ethos</a>
+{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}<span class="mono">ETHOS.md{% if doc and doc.meta.version %} · v{{ doc.meta.version }}{% endif %}</span>{% endblock %}
+
+{% block body %}
+{% if not doc %}
+<div class="empty">
+  {{ MARK|safe }}
+  <div class="display">The ethos isn't here</div>
+  <p class="small">This build doesn't include <code>ETHOS.md</code>. It lives at the root of the repository; rebuild the image to bring it back.</p>
+</div>
+{% else %}
+<div class="page-head ethos-head">
+  <div>
+    <div class="eyebrow">cove · ethos</div>
+    <h1>{{ doc.title }}</h1>
+    <div class="lede">{{ doc.intro|safe }}</div>
+    <div class="ethos-meta">
+      {% if doc.meta.version %}<span class="chip accent">v{{ doc.meta.version }}</span>{% endif %}
+      {% if doc.meta['last reviewed'] %}<span class="chip">Reviewed {{ doc.meta['last reviewed'] }}</span>{% endif %}
+      <span class="chip">{{ doc.principles|length }} principles</span>
+      <span class="chip">Living document</span>
+    </div>
+  </div>
+</div>
+
+<div class="ethos-layout">
+  <nav class="ethos-toc" aria-label="On this page">
+    <div class="eyebrow">On this page</div>
+    <ol>
+    {% for sec in doc.sections %}
+      <li><a href="#{{ sec.id }}">{{ sec.title }}</a>
+      {% if sec.principles %}<ol class="ethos-toc-principles">
+        {% for p in sec.principles %}<li><a href="#{{ p.id }}"><span class="n">{{ '%02d'|format(p.number) }}</span>{{ p.title }}</a></li>{% endfor %}
+      </ol>{% endif %}
+      </li>
+    {% endfor %}
+    </ol>
+  </nav>
+
+  <div class="ethos-body">
+  {% for sec in doc.sections %}
+    {% if sec.id == 'the-heart' %}
+    <section class="card accent ethos-heart" id="{{ sec.id }}" aria-labelledby="{{ sec.id }}-h">
+      <h2 class="eyebrow" id="{{ sec.id }}-h">{{ sec.title }}</h2>
+      <div class="ethos-heart-text">{{ sec.body|safe }}</div>
+    </section>
+    {% else %}
+    <section class="ethos-section" id="{{ sec.id }}" aria-labelledby="{{ sec.id }}-h">
+      <h2 id="{{ sec.id }}-h"><a class="ethos-anchor" href="#{{ sec.id }}">{{ sec.title }}</a></h2>
+      {% if sec.body.strip() %}<div class="prose">{{ sec.body|safe }}</div>{% endif %}
+
+      {% if sec.principles %}
+      <ol class="ethos-principles">
+      {% for p in sec.principles %}
+        <li class="ethos-principle" id="{{ p.id }}">
+          <div class="num" aria-hidden="true">{{ '%02d'|format(p.number) }}</div>
+          <div class="content">
+            <h3><a class="ethos-anchor" href="#{{ p.id }}"><span class="sr-only">{{ p.number }}. </span>{{ p.title }}</a></h3>
+            <div class="statement">{{ p.statement|safe }}</div>
+            <dl class="fields">
+              {% if p.why %}<dt>Why</dt><dd class="prose">{{ p.why|safe }}</dd>{% endif %}
+              {% if p.practice %}<dt>In practice</dt><dd class="prose">{{ p.practice|safe }}</dd>{% endif %}
+            </dl>
+            {% if p.extra %}<div class="prose">{{ p.extra|safe }}</div>{% endif %}
+          </div>
+        </li>
+      {% endfor %}
+      </ol>
+      {% endif %}
+
+      {% for sub in sec.subsections %}
+      <h3 class="ethos-sub" id="{{ sub.id }}"><a class="ethos-anchor" href="#{{ sub.id }}">{{ sub.title }}</a></h3>
+      <div class="prose">{{ sub.body|safe }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

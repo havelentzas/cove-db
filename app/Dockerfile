@@ -15,6 +15,7 @@ COPY app/src ./src
 RUN uv sync --frozen
 COPY schemas /srv/schemas
 COPY brand /srv/brand
+COPY ETHOS.md /srv/ETHOS.md
 COPY obsidian-plugin/main.js obsidian-plugin/manifest.json obsidian-plugin/styles.css /srv/obsidian-plugin/
 COPY templates /srv/templates
 COPY db/migrations /srv/db/migrations

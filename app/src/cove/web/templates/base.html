@@ -52,6 +52,7 @@
 <footer class="shell-footer">
   <span class="eyebrow">cove · personal databases</span>
   <a href="/" class="muted" style="text-decoration:none">All services</a>
+  <a href="/ethos" class="muted" style="text-decoration:none">Ethos</a>
   {% for s in SERVICES %}<span class="svc-dot" data-svc="{{ s.key }}" title="{{ s.name }}{% if s.status != 'live' %} (coming){% endif %}" style="display:inline-flex;align-items:center;gap:6px;{% if s.status != 'live' %}opacity:.5{% endif %}"><span style="width:9px;height:9px;border-radius:2px;background:var(--dot)"></span>{{ s.name }}</span>{% endfor %}
   <span class="spacer"></span>{% block footer_action %}<a href="/export.vcf" class="muted" style="text-decoration:none">{{ icon('download') }} Export all (.vcf)</a>{% endblock %}
 </footer>
