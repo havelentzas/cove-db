@@ -27,7 +27,9 @@ def _pool(kind: str) -> ConnectionPool:
         url = _urls.get(kind) or os.environ.get("COVE_DATABASE_URL" if kind == "rw" else "COVE_READONLY_URL")
         if not url:
             raise RuntimeError(f"database URL for {kind!r} is not configured")
-        _pools[kind] = ConnectionPool(url, min_size=1, max_size=5, kwargs={"row_factory": dict_row}, open=True)
+        # check=… validates each connection on checkout, so a Postgres restart never surfaces as a 500
+        _pools[kind] = ConnectionPool(url, min_size=1, max_size=5, kwargs={"row_factory": dict_row}, open=True,
+                                      check=ConnectionPool.check_connection)
     return _pools[kind]
 
 
