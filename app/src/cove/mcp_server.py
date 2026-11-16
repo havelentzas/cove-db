@@ -56,27 +56,27 @@ async def _call(fn, *args, **kwargs) -> Any:
 
 
 # ============================================================== system / meta
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "core"})
 async def describe_system() -> dict:
     """Overview of cove-db: registered domains and their conventions, every table with its columns,
     row counts, agent-note topics and recent schema changes. Call this first."""
     return await _call(svc.describe_system)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "core"})
 async def read_notes(topic: str | None = None) -> list[dict]:
     """Read durable notes that agents have saved about the user and this system (optionally one topic)."""
     return await _call(svc.read_notes, topic)
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "core"})
 async def write_note(topic: str, note: str, ctx: Context, note_id: int | None = None) -> dict:
     """Save a durable note for future agent sessions (e.g. topic 'preferences': 'User calls their
     sister Meg'). Pass note_id to update an existing note instead of adding a new one."""
     return await _call(svc.write_note, topic, note, _actor(ctx), note_id)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "core"})
 async def sql_query(sql: str, max_rows: int = 200) -> dict:
     """Run a read-only SQL query (Postgres) for questions the other tools can't answer.
     Schemas: crm.*, meta.*. Useful views: crm.contact_overview, crm.follow_ups_due.
@@ -90,7 +90,7 @@ async def sql_query(sql: str, max_rows: int = 200) -> dict:
 
 
 # ============================================================== contacts
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "people"})
 async def search_contacts(query: str | None = None, tag: str | None = None, due_only: bool = False,
                           include_archived: bool = False, limit: int = 50) -> list[dict]:
     """Find contacts by name, email, phone digits or note text (fuzzy), optionally filtered to a tag/group
@@ -98,14 +98,14 @@ async def search_contacts(query: str | None = None, tag: str | None = None, due_
     return await _call(svc.search_contacts, query, tag, due_only, include_archived, limit)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "people"})
 async def get_contact(contact_id: str, interactions: int = 10) -> dict:
     """Full contact: JSContact card, version (needed for updates), tags, relationships,
     recent interactions and follow-up status."""
     return await _call(svc.get_contact, contact_id, interactions=interactions)
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def create_contact(ctx: Context, full_name: str | None = None, given: str | None = None,
                          surname: str | None = None, emails: list[str] | None = None,
                          phones: list[str] | None = None, organization: str | None = None,
@@ -123,7 +123,7 @@ async def create_contact(ctx: Context, full_name: str | None = None, given: str 
     return await _call(svc.create_contact, card, _actor(ctx))
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def update_contact(contact_id: str, patch: dict, expected_version: int, ctx: Context) -> dict:
     """Edit a contact's JSContact card with a JSON Merge Patch (RFC 7396): keys you send are replaced,
     keys set to null are removed, everything else is kept. Collections are id-keyed maps, e.g.
@@ -132,14 +132,14 @@ async def update_contact(contact_id: str, patch: dict, expected_version: int, ct
     return await _call(svc.update_contact, contact_id, patch, expected_version, _actor(ctx))
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False), meta={"service": "people"})
 async def archive_contact(contact_id: str, ctx: Context, archived: bool = True) -> dict:
     """Archive (hide) a contact, or restore it with archived=false. Nothing is deleted."""
     return await _call(svc.archive_contact, contact_id, _actor(ctx), archived)
 
 
 # ============================================================== CRM
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def log_interaction(contact_ids: list[str], summary: str, ctx: Context,
                           kind: Literal["call", "meeting", "message", "email", "other"] = "other",
                           occurred_at: str | None = None, notes: str | None = None,
@@ -150,13 +150,13 @@ async def log_interaction(contact_ids: list[str], summary: str, ctx: Context,
                        calendar_event_id)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "people"})
 async def list_interactions(contact_id: str | None = None, since: str | None = None, limit: int = 20) -> list[dict]:
     """Recent interactions, newest first — for one contact or everyone, optionally since an ISO date."""
     return await _call(svc.list_interactions, contact_id, limit, since)
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def set_follow_up(contact_id: str, ctx: Context, every_days: int | None = None,
                         snoozed_until: str | None = None) -> dict:
     """Set how often to reach out to a contact (every_days), optionally snoozing until an ISO date.
@@ -164,19 +164,19 @@ async def set_follow_up(contact_id: str, ctx: Context, every_days: int | None = 
     return await _call(svc.set_follow_up, contact_id, every_days, _actor(ctx), snoozed_until)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "people"})
 async def follow_ups_due(limit: int = 50) -> list[dict]:
     """Contacts the user is due to reach out to (last contact + cadence has passed), most overdue first."""
     return await _call(svc.follow_ups_due, limit)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "people"})
 async def list_tags() -> list[dict]:
     """All tags and groups with how many active contacts each has."""
     return await _call(svc.list_tags)
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def tag_contacts(contact_ids: list[str], tags: list[str], ctx: Context,
                        kind: Literal["tag", "group"] = "tag") -> list[dict]:
     """Add tags to contacts; unknown tags are created with the given kind ('group' for things like
@@ -184,14 +184,14 @@ async def tag_contacts(contact_ids: list[str], tags: list[str], ctx: Context,
     return await _call(svc.tag_contacts, contact_ids, tags, _actor(ctx), kind)
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def untag_contacts(contact_ids: list[str], tags: list[str], ctx: Context) -> str:
     """Remove tags from contacts."""
     await _call(svc.untag_contacts, contact_ids, tags, _actor(ctx))
     return "ok"
 
 
-@mcp.tool(annotations=WRITE)
+@mcp.tool(annotations=WRITE, meta={"service": "people"})
 async def relate_contacts(from_id: str, to_id: str, relation: str, ctx: Context, note: str | None = None) -> dict:
     """Record that `from` relates to `to`. relation uses the vCard/JSContact vocabulary where possible:
     friend, spouse, parent, child, sibling, colleague, co-worker, neighbor, acquaintance, met, emergency
@@ -199,7 +199,7 @@ async def relate_contacts(from_id: str, to_id: str, relation: str, ctx: Context,
     return await _call(svc.relate_contacts, from_id, to_id, relation, _actor(ctx), note)
 
 
-@mcp.tool(annotations=READ)
+@mcp.tool(annotations=READ, meta={"service": "people"})
 async def export_vcard(contact_ids: list[str] | None = None, tag: str | None = None) -> str:
     """Export contacts (all active, a list of ids, or one tag) as vCard 4.0 text."""
     return await _call(svc.export_vcard, contact_ids, tag)

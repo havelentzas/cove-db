@@ -5,11 +5,11 @@
   <div style="display:flex;gap:var(--s4);align-items:center;flex:1 1 320px">
     {% if photo %}<img class="avatar lg" src="{{ photo }}" alt="">{% else %}<span class="avatar lg">{{ c.display_name|initials }}</span>{% endif %}
     <div>
-      <a class="small muted" href="/" style="text-decoration:none">{{ icon('arrow-left') }} Everyone</a>
+      <a class="small muted" href="/people" style="text-decoration:none">{{ icon('arrow-left') }} Everyone</a>
       <h1>{{ c.display_name }}</h1>
       <div>
         {% if c.archived_at %}<span class="chip">archived</span>{% endif %}
-        {% for t in c.tags %}<a class="chip accent {{ t.kind }}" href="/?tag={{ t.name|urlencode }}">{{ t.name }}</a>{% endfor %}
+        {% for t in c.tags %}<a class="chip accent {{ t.kind }}" href="/people?tag={{ t.name|urlencode }}">{{ t.name }}</a>{% endfor %}
         <span class="eyebrow">{% if c.last_contacted %}Last talked {{ c.last_contacted|d }}{% else %}No conversations yet{% endif %}</span>
       </div>
     </div>

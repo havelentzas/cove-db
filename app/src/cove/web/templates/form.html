@@ -24,7 +24,7 @@
 {% block body %}
 <div class="page-head">
   <div>
-    <a class="small muted" href="{{ '/contacts/' ~ contact.id if contact else '/' }}" style="text-decoration:none">{{ icon('arrow-left') }} {{ contact.display_name if contact else 'Everyone' }}</a>
+    <a class="small muted" href="{{ '/contacts/' ~ contact.id if contact else '/people' }}" style="text-decoration:none">{{ icon('arrow-left') }} {{ contact.display_name if contact else 'Everyone' }}</a>
     <h1>{{ 'Edit details' if contact else 'Add someone' }}</h1>
     <p class="lede">{% if contact %}Change anything — nothing else about them is lost.{% else %}Only a name is needed. You can always add more later.{% endif %}</p>
   </div>
@@ -59,7 +59,7 @@
   {% endif %}
   <div class="actions" style="position:sticky;bottom:0;padding:var(--s3) 0;background:linear-gradient(transparent, var(--bg) 35%)">
     <button type="submit">{{ icon('check') }}{{ 'Save changes' if contact else 'Add to cove' }}</button>
-    <a class="btn secondary" href="{{ '/contacts/' ~ contact.id if contact else '/' }}">Cancel</a>
+    <a class="btn secondary" href="{{ '/contacts/' ~ contact.id if contact else '/people' }}">Cancel</a>
     <span class="xs muted">Fields come from <code>templates/{{ t.id }}.json</code></span>
   </div>
 </form>

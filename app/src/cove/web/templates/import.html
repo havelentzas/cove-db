@@ -10,7 +10,7 @@
   <p>Imported <strong>{{ result.created|length }}</strong> contact(s).
     {{ result.failed|length }} couldn't be saved:</p>
   <ul class="small">{% for f in result.failed %}<li>{{ f }}</li>{% endfor %}</ul>
-  <a class="btn" href="/">Go to contacts</a>
+  <a class="btn" href="/people">Go to People</a>
 </section>
 
 {% elif not preview %}

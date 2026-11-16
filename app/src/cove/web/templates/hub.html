@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block nav %}
+  <a href="/" aria-current="page">Services</a>
+  {% for s in SERVICES if s.status == 'live' %}<a href="{{ s.path }}">{{ s.name }}</a>{% endfor %}
+{% endblock %}
+{% block header_action %}<button class="secondary" type="button" onclick="document.getElementById('info-core').showModal()">{{ icon('link') }}Connect an agent</button>{% endblock %}
+{% block footer_action %}<a href="/api/services" class="muted" style="text-decoration:none">{{ icon('download') }} Catalog (JSON)</a>{% endblock %}
+
+{% macro sheet(s) %}
+{% set id = s.id %}
+<dialog class="sheet" id="info-{{ id }}" data-service="{{ s.key }}" aria-labelledby="info-{{ id }}-title">
+  <div class="sheet-head">
+    {{ MARK|safe }}
+    <div style="flex:1">
+      <div class="eyebrow">{{ 'System' if not s.key else (s.domain ~ ' · ' ~ s.status) }}</div>
+      <h2 id="info-{{ id }}-title" style="margin:0">{{ s.name }} endpoints</h2>
+    </div>
+    <form method="dialog"><button class="ghost" aria-label="Close">Close</button></form>
+  </div>
+  <div class="sheet-body">
+    {% if s.mcp_tools or s.web_routes %}
+      <h3>MCP server</h3>
+      {% for u in cat.mcp.urls %}
+      <div class="copyline"><code>{{ u }}</code><button class="secondary" type="button" data-copy="{{ u }}">Copy</button></div>
+      {% endfor %}
+      <p class="xs muted" style="margin:0 0 var(--s2)">One MCP server serves every service ({{ cat.mcp.transport }}). Add it to Claude Code:</p>
+      <div class="copyline"><code>claude mcp add --scope user --transport http cove {{ cat.mcp.urls[-1] }}</code><button class="secondary" type="button" data-copy="claude mcp add --scope user --transport http cove {{ cat.mcp.urls[-1] }}">Copy</button></div>
+
+      <h3>MCP tools · {{ s.mcp_tools|length }}</h3>
+      {% for t in s.mcp_tools %}
+      <div class="endpoint">
+        <span class="method {{ 'read' if t.read_only else ('danger' if t.destructive else 'write') }}">{{ 'read' if t.read_only else 'write' }}</span>
+        <span class="sig">{{ t.name }}(<span class="opt">{% for p in t.params %}{% if p.required %}<b style="color:var(--ink)">{{ p.name }}</b>{% else %}{{ p.name }}?{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</span>)</span>
+        <span class="desc">{{ t.summary }}</span>
+      </div>
+      {% else %}<p class="small muted">No MCP tools.</p>{% endfor %}
+
+      <h3>Web &amp; HTTP routes · {{ s.web_routes|length }}</h3>
+      {% for r in s.web_routes %}
+      <div class="endpoint">
+        <span class="method {{ 'read' if r.methods == ['GET'] else 'write' }}">{{ r.methods|join(' ') }}</span>
+        <span class="sig">{% if r.methods == ['GET'] and '{' not in r.path %}<a href="{{ r.path }}">{{ r.path }}</a>{% else %}{{ r.path }}{% endif %}</span>
+        <span class="desc">{{ r.name }}</span>
+      </div>
+      {% else %}<p class="small muted">No web routes.</p>{% endfor %}
+      {% if not s.key %}<p class="xs muted" style="margin-top:var(--s4)">Web routes are browser pages and form posts, not a JSON API. <code>/api/services</code> is the machine-readable catalog.</p>{% endif %}
+    {% else %}
+      <div class="empty" style="padding:var(--s5) 0">
+        <div class="display">Not built yet</div>
+        <p class="small">{{ s.name }} is on the plan ({{ s.domain }}). When it ships, its MCP tools and pages will appear here automatically.</p>
+      </div>
+    {% endif %}
+  </div>
+</dialog>
+{% endmacro %}
+
+{% block body %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">cove</div>
+    <h1>Your databases</h1>
+    <p class="lede">Small, private databases for the parts of life worth keeping track of — all in one place, and all reachable by your agents.</p>
+  </div>
+</div>
+
+<section class="tiles" aria-label="Services">
+  {% for s in cat.services if s.key %}
+  <article class="tile {{ s.status }}" data-service="{{ s.key }}">
+    <div class="head">
+      {{ MARK|safe }}
+      <div style="flex:1;min-width:0">
+        {% if s.status == 'live' %}<a class="name" href="{{ s.path }}">{{ s.name }}</a>{% else %}<span class="name">{{ s.name }}</span>{% endif %}
+        <div class="eyebrow" style="margin-top:6px">{{ s.domain }}</div>
+      </div>
+      {% if s.status == 'live' %}<span class="chip accent">live</span>{% else %}<span class="chip">coming</span>{% endif %}
+    </div>
+    <p class="blurb">{{ s.blurb }}</p>
+    {% if stats.get(s.key) %}
+    <div class="stats">
+      {% for n, label in stats[s.key] %}<div><div class="stat">{{ n }}</div><div class="eyebrow">{{ label }}</div></div>{% endfor %}
+    </div>
+    {% endif %}
+    <div class="foot" {% if not stats.get(s.key) %}style="margin-top:auto"{% endif %}>
+      <span class="xs muted mono">{{ s.mcp_tools|length }} tools · {{ s.web_routes|length }} routes</span>
+      <span class="spacer"></span>
+      <button class="info-btn" type="button" onclick="document.getElementById('info-{{ s.id }}').showModal()" aria-label="{{ s.name }} endpoints" title="Endpoints">i</button>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+
+{% set core = cat.services|selectattr('id', 'equalto', 'core')|first %}
+<section class="card" style="margin-top:var(--s5)" data-service="">
+  <div class="row" style="align-items:center">
+    <div>
+      <h2 style="margin-bottom:var(--s1)">{{ icon('link') }} System &amp; agents</h2>
+      <p class="small muted" style="margin:0">{{ core.blurb }} {{ core.mcp_tools|length }} shared MCP tools.</p>
+    </div>
+    <div class="shrink"><button class="info-btn" type="button" onclick="document.getElementById('info-core').showModal()" aria-label="System endpoints" title="Endpoints">i</button></div>
+  </div>
+</section>
+
+{% for s in cat.services %}{{ sheet(s) }}{% endfor %}
+
+<script>
+document.addEventListener("click", function (e) {
+  var b = e.target.closest("[data-copy]"); if (!b) return;
+  var done = function () { var t = b.textContent; b.textContent = "Copied"; setTimeout(function () { b.textContent = t; }, 1200); };
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(b.dataset.copy).then(done); }
+  else { var ta = document.createElement("textarea"); ta.value = b.dataset.copy; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (_) {} ta.remove(); }
+});
+document.querySelectorAll("dialog.sheet").forEach(function (d) {
+  d.addEventListener("click", function (e) { if (e.target === d) d.close(); });   // click backdrop to close
+  d.addEventListener("close", function () { if (location.hash === "#" + d.id) history.replaceState(null, "", location.pathname); });
+});
+// deep link: /#info-people opens that sheet
+var deep = location.hash && document.getElementById(location.hash.slice(1));
+if (deep && deep.tagName === "DIALOG") deep.showModal();
+document.querySelectorAll("[onclick*='showModal']").forEach(function (b) {
+  b.addEventListener("click", function () { var id = (b.getAttribute("onclick").match(/'(info-[^']+)'/) || [])[1]; if (id) history.replaceState(null, "", "#" + id); });
+});
+</script>
+{% endblock %}

@@ -15,7 +15,7 @@ preferences). Save new durable learnings with `write_note`. This file covers *ho
 |---|---|---|
 | postgres | `pgvector/pgvector:pg17`, volume `cove_pgdata` | 127.0.0.1:5432, db `cove` (+ `cove_test`) |
 | migrate  | dbmate, runs `db/migrations/*.sql` then exits | — |
-| web      | FastAPI + Jinja2 + HTMX (`cove.web.app`) | 127.0.0.1:8080, and on the tailnet via `tailscale serve` at https://cachyos-x8664.tail4fdffd.ts.net |
+| web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` at https://cachyos-x8664.tail4fdffd.ts.net |
 | mcp      | MCP SDK 2.x `MCPServer`, streamable HTTP (`cove.mcp_server`) | http://127.0.0.1:8765/mcp, and on the tailnet at https://cachyos-x8664.tail4fdffd.ts.net:8443/mcp (host allow-list: `COVE_MCP_EXTRA_HOSTS`) |
 | backup   | nightly `pg_dump -Fc` → `./backups`, 14-day retention | — |
 
@@ -42,6 +42,12 @@ pastel washes and blurred shadows (the user rejected that look as "too AI"). Cop
   contact form, driven entirely by this file.
 - `db/migrations/` — dbmate SQL (`-- migrate:up` / `-- migrate:down`). `db/init/00-roles.sh` creates login
   roles on first volume init only.
+
+## Service registration (keeps the home page accurate automatically)
+- MCP tools: `@mcp.tool(..., meta={"service": "<key>"})` (`core` for system tools).
+- Web routes: put them on `APIRouter(tags=["<key>"])` and `include_router` it (see `people` in `web/app.py`).
+- `brand/services.json`: set the service's `status` to `live` and its `path`.
+The home page (`web/hub.py`) builds its catalog from these, so nothing is hand-maintained.
 
 ## Data conventions (CRM)
 - Contact data lives ONLY in `crm.contacts.card`, a JSContact Card (RFC 9553). Collections are id-keyed maps.

@@ -86,7 +86,10 @@ service dots.
 `.shell-header` (with service stripe), `.brand`, `.nav`, `.page-head` (eyebrow + h1 + lede), `.card`
 (`.accent` = signal block, `.inset` = dashed form well), `.btn`/`button` (`.secondary`, `.ghost`,
 `.link`), `.search`, `.toggle-chip`, `.chip` (`.accent`, `.group`), `.avatar` (`.lg`, `.signal`),
-`.list`/`.list-item`, `dl.fields`, `.timeline`, `.notice` (`.error`), `.empty`, `.due`, `.eyebrow`.
+`.list`/`.list-item`, `dl.fields`, `.timeline`, `.notice` (`.error`), `.empty`, `.due`, `.eyebrow`,
+`.tiles`/`.tile` (`.live`, `.planned`), `.info-btn`, `dialog.sheet`, `.endpoint`, `.method`, `.copyline`.
+Any element with `data-service="<key>"` takes on that service's colours, which is how the home page shows
+every service's tile on one page. That's the one place several service colours share a screen.
 Icons: 24px grid, 2px stroke, square caps (see `app/src/cove/web/templates/_icons.html`).
 
 ## Voice

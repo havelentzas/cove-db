@@ -45,7 +45,9 @@ services:
       dockerfile: app/Dockerfile
     image: cove-app:latest
     restart: unless-stopped
-    environment: *app-env
+    environment:
+      <<: *app-env
+      COVE_MCP_URLS: ${COVE_MCP_URLS:-http://127.0.0.1:8765/mcp}
     command: ["uvicorn", "cove.web.app:app", "--host", "0.0.0.0", "--port", "8080"]
     ports:
       - "127.0.0.1:8080:8080"

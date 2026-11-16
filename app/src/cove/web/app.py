@@ -8,12 +8,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import APIRouter, FastAPI, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from cove import brand
+from cove.web import hub
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -23,6 +24,7 @@ TEMPLATE_NAME = "contact-default"
 app = FastAPI(title="cove", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 app.mount("/brand", StaticFiles(directory=brand.BRAND_DIR), name="brand")
+people = APIRouter(tags=["people"])   # every People route; the home page lists these
 pages = Jinja2Templates(directory=HERE / "templates")
 pages.env.globals.update(INTERACTION_KINDS=svc.INTERACTION_KINDS, RELATION_TYPES=svc.RELATION_TYPES,
                          SERVICE=brand.service("people"), SERVICES=brand.registry()["services"],
@@ -151,7 +153,7 @@ def _detail_sections(template: dict, card: dict) -> list[dict]:
 
 
 # ================================================================ list
-@app.get("/", response_class=HTMLResponse)
+@people.get("/people", response_class=HTMLResponse)
 def index(request: Request, q: str = "", tag: str = "", due: bool = False, archived: bool = False):
     rows = svc.search_contacts(q or None, tag or None, due, archived, limit=500)
     ctx = {"rows": rows, "q": q, "tag": tag, "due": due, "archived": archived}
@@ -171,12 +173,12 @@ def _form_page(request: Request, *, contact=None, values=None, errors=None, stat
     }, status_code=status)
 
 
-@app.get("/contacts/new", response_class=HTMLResponse)
+@people.get("/contacts/new", response_class=HTMLResponse)
 def new_contact(request: Request):
     return _form_page(request)
 
 
-@app.post("/contacts/new")
+@people.post("/contacts/new")
 async def create_contact(request: Request):
     form = await request.form()
     t = _template()
@@ -193,12 +195,12 @@ async def create_contact(request: Request):
     return back(f"/contacts/{c['id']}")
 
 
-@app.get("/contacts/{cid}/edit", response_class=HTMLResponse)
+@people.get("/contacts/{cid}/edit", response_class=HTMLResponse)
 def edit_contact(request: Request, cid: str):
     return _form_page(request, contact=svc.get_contact(cid, interactions=0))
 
 
-@app.post("/contacts/{cid}/edit")
+@people.post("/contacts/{cid}/edit")
 async def save_contact(request: Request, cid: str):
     form = await request.form()
     t = _template()
@@ -221,7 +223,7 @@ async def save_contact(request: Request, cid: str):
 
 
 # ================================================================ detail
-@app.get("/contacts/{cid}", response_class=HTMLResponse)
+@people.get("/contacts/{cid}", response_class=HTMLResponse)
 def contact_detail(request: Request, cid: str):
     try:
         c = svc.get_contact(cid, interactions=50)
@@ -235,70 +237,70 @@ def contact_detail(request: Request, cid: str):
     })
 
 
-@app.post("/contacts/{cid}/archive")
+@people.post("/contacts/{cid}/archive")
 def archive(request: Request, cid: str, archived: bool = Form(True)):
     svc.archive_contact(cid, actor(request), archived)
     return back(f"/contacts/{cid}")
 
 
-@app.post("/contacts/{cid}/interactions")
+@people.post("/contacts/{cid}/interactions")
 def add_interaction(request: Request, cid: str, summary: str = Form(...), kind: str = Form("other"),
                     occurred_at: str = Form(""), notes: str = Form(""), also: list[str] = Form([])):
     svc.log_interaction([cid, *also], summary, actor(request), kind, occurred_at or None, notes or None)
     return back(f"/contacts/{cid}")
 
 
-@app.post("/interactions/{iid}/delete")
+@people.post("/interactions/{iid}/delete")
 def remove_interaction(request: Request, iid: int, contact: str = Form(...)):
     svc.delete_interaction(iid, actor(request))
     return back(f"/contacts/{contact}")
 
 
-@app.post("/contacts/{cid}/follow-up")
+@people.post("/contacts/{cid}/follow-up")
 def follow_up(request: Request, cid: str, every_days: str = Form(""), snoozed_until: str = Form("")):
     svc.set_follow_up(cid, int(every_days) if every_days.strip() else None, actor(request), snoozed_until or None)
     return back(f"/contacts/{cid}")
 
 
-@app.post("/contacts/{cid}/tags")
+@people.post("/contacts/{cid}/tags")
 def set_tags(request: Request, cid: str, tags: str = Form("")):
     svc.set_contact_tags(cid, [t.strip() for t in tags.split(",") if t.strip()], actor(request))
     return back(f"/contacts/{cid}")
 
 
-@app.post("/contacts/{cid}/relationships")
+@people.post("/contacts/{cid}/relationships")
 def add_relationship(request: Request, cid: str, to_id: str = Form(...), relation: str = Form(...),
                      note: str = Form("")):
     svc.relate_contacts(cid, to_id, relation, actor(request), note or None)
     return back(f"/contacts/{cid}")
 
 
-@app.post("/relationships/{rid}/delete")
+@people.post("/relationships/{rid}/delete")
 def remove_relationship(request: Request, rid: int, contact: str = Form(...)):
     svc.delete_relationship(rid, actor(request))
     return back(f"/contacts/{contact}")
 
 
 # ================================================================ tags
-@app.get("/tags", response_class=HTMLResponse)
+@people.get("/tags", response_class=HTMLResponse)
 def tags_page(request: Request):
     return pages.TemplateResponse(request, "tags.html", {"tags": svc.list_tags()})
 
 
-@app.post("/tags/{tid}")
+@people.post("/tags/{tid}")
 def update_tag(request: Request, tid: int, name: str = Form(""), kind: str = Form(""), color: str = Form("")):
     svc.update_tag(tid, actor(request), name or None, kind or None, color or None)
     return back("/tags")
 
 
-@app.post("/tags/{tid}/delete")
+@people.post("/tags/{tid}/delete")
 def delete_tag(request: Request, tid: int):
     svc.delete_tag(tid, actor(request))
     return back("/tags")
 
 
 # ================================================================ import / export
-@app.get("/import", response_class=HTMLResponse)
+@people.get("/import", response_class=HTMLResponse)
 def import_page(request: Request):
     return pages.TemplateResponse(request, "import.html", {"preview": None})
 
@@ -327,7 +329,7 @@ def _stash(cards: list[dict]) -> str:
     return token
 
 
-@app.post("/import", response_class=HTMLResponse)
+@people.post("/import", response_class=HTMLResponse)
 async def import_preview(request: Request, file: UploadFile):
     try:
         preview = svc.preview_import(_decode(await file.read()))
@@ -337,7 +339,7 @@ async def import_preview(request: Request, file: UploadFile):
     return pages.TemplateResponse(request, "import.html", {"preview": preview, "token": token})
 
 
-@app.post("/import/confirm", response_class=HTMLResponse)
+@people.post("/import/confirm", response_class=HTMLResponse)
 async def import_confirm(request: Request):
     form = await request.form()
     pending = _PENDING.pop(str(form.get("token", "")), None)
@@ -350,10 +352,10 @@ async def import_confirm(request: Request):
     result = svc.import_cards(chosen, f"{actor(request)}:import")
     if result["failed"]:
         return pages.TemplateResponse(request, "import.html", {"preview": None, "result": result})
-    return back("/", imported=str(len(result["created"])))
+    return back("/people", imported=str(len(result["created"])))
 
 
-@app.get("/export.vcf")
+@people.get("/export.vcf")
 def export(tag: str = "", archived: bool = False):
     body = svc.export_vcard(tag=tag or None, include_archived=archived)
     name = f"cove-{tag or 'contacts'}.vcf"
@@ -369,6 +371,10 @@ def not_found(request: Request, exc: svc.NotFound):
 @app.exception_handler(svc.Invalid)
 def invalid(request: Request, exc: svc.Invalid):
     return PlainTextResponse(f"Invalid input: {exc}", status_code=422)
+
+
+app.include_router(people)
+app.include_router(hub.router)
 
 
 @app.get("/healthz")

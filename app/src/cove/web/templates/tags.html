@@ -15,7 +15,7 @@
       <tr>
         <td><form id="t{{ t.id }}" method="post" action="/tags/{{ t.id }}"><input name="name" value="{{ t.name }}" aria-label="Name" style="min-width:140px"></form></td>
         <td><select name="kind" form="t{{ t.id }}" aria-label="Kind" style="width:auto"><option value="tag" {% if t.kind == 'tag' %}selected{% endif %}>tag</option><option value="group" {% if t.kind == 'group' %}selected{% endif %}>group</option></select></td>
-        <td><a class="chip accent" href="/?tag={{ t.name|urlencode }}">{{ t.contacts }}</a></td>
+        <td><a class="chip accent" href="/people?tag={{ t.name|urlencode }}">{{ t.contacts }}</a></td>
         <td><div class="actions" style="flex-wrap:nowrap">
           <button form="t{{ t.id }}" class="secondary">Save</button>
           <a class="btn ghost" href="/export.vcf?tag={{ t.name|urlencode }}" title="Export this circle">{{ icon('download') }}</a>

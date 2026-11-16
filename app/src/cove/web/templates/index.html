@@ -11,7 +11,7 @@
 </div>
 <div class="grid">
   <section class="card">
-    <form action="/" method="get" hx-get="/" hx-target="#rows" hx-trigger="input changed delay:200ms from:#q, change" hx-push-url="true">
+    <form action="/people" method="get" hx-get="/people" hx-target="#rows" hx-trigger="input changed delay:200ms from:#q, change" hx-push-url="true">
       <div class="search">{{ icon('search') }}<input id="q" name="q" value="{{ q }}" type="search" placeholder="Find someone by name, email, phone or note" autocomplete="off" autofocus aria-label="Search people"></div>
       <div class="actions" style="margin-top:var(--s3)">
         <select name="tag" aria-label="Circle" class="select-chip">

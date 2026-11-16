@@ -1,10 +1,12 @@
 {% from "_icons.html" import icon %}
+{#- svc: the service this page belongs to (defaults to People); svc.key == "" means cove core -#}
+{% set S = svc if svc is defined else SERVICE %}
 <!doctype html>
-<html lang="en" data-service="{{ SERVICE.key }}">
+<html lang="en" data-service="{{ S.key }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{{ SERVICE.name }}{% endblock %} · cove</title>
+<title>{% block title %}{{ S.name }}{% endblock %} · cove</title>
 <script>try{var t=localStorage.getItem("cove-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="icon" href="/brand/logo/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/brand/fonts/archivo-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -16,25 +18,28 @@
 {% set path = request.url.path %}
 <header class="shell-header">
   <div class="inner">
-    <a class="brand" href="/" aria-label="cove {{ SERVICE.name }} — home">
-      {{ MARK|safe }}<span class="word">cove</span><span class="sep" aria-hidden="true"></span><span class="svc">{{ SERVICE.name }}</span>
+    <a class="brand" href="/" aria-label="cove home">
+      {{ MARK|safe }}<span class="word">cove</span>{% if S.key %}<span class="sep" aria-hidden="true"></span><span class="svc">{{ S.name }}</span>{% endif %}
     </a>
     <nav class="nav" aria-label="Main">
-      <a href="/" {% if path == '/' and not request.query_params.get('due') %}aria-current="page"{% endif %}>Everyone</a>
-      <a href="/?due=1" {% if request.query_params.get('due') %}aria-current="page"{% endif %}>Reach out</a>
+    {% block nav %}
+      <a href="/people" {% if path == '/people' and not request.query_params.get('due') %}aria-current="page"{% endif %}>Everyone</a>
+      <a href="/people?due=1" {% if request.query_params.get('due') %}aria-current="page"{% endif %}>Reach out</a>
       <a href="/tags" {% if path.startswith('/tags') %}aria-current="page"{% endif %}>Circles</a>
       <a href="/import" {% if path.startswith('/import') %}aria-current="page"{% endif %}>Import</a>
+    {% endblock %}
     </nav>
     <span class="spacer"></span>
     <button class="ghost theme-toggle" type="button" onclick="coveToggleTheme()" aria-label="Switch light or dark theme" title="Light / dark">{{ icon('moon', 'moon') }}{{ icon('sun', 'sun') }}</button>
-    <a class="btn" href="/contacts/new">{{ icon('plus') }}Add someone</a>
+    {% block header_action %}<a class="btn" href="/contacts/new">{{ icon('plus') }}Add someone</a>{% endblock %}
   </div>
 </header>
 <main class="page">{% block body %}{% endblock %}</main>
 <footer class="shell-footer">
   <span class="eyebrow">cove · personal databases</span>
+  <a href="/" class="muted" style="text-decoration:none">All services</a>
   {% for s in SERVICES %}<span class="svc-dot" data-svc="{{ s.key }}" title="{{ s.name }}{% if s.status != 'live' %} (coming){% endif %}" style="display:inline-flex;align-items:center;gap:6px;{% if s.status != 'live' %}opacity:.5{% endif %}"><span style="width:9px;height:9px;border-radius:2px;background:var(--dot)"></span>{{ s.name }}</span>{% endfor %}
-  <span class="spacer"></span><a href="/export.vcf" class="muted" style="text-decoration:none">{{ icon('download') }} Export all (.vcf)</a>
+  <span class="spacer"></span>{% block footer_action %}<a href="/export.vcf" class="muted" style="text-decoration:none">{{ icon('download') }} Export all (.vcf)</a>{% endblock %}
 </footer>
 <script>
 function coveToggleTheme(){
