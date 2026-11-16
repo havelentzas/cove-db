@@ -1,5 +1,5 @@
 # Build context is the repo root (see docker-compose.yml).
-FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+FROM python:3.15-slim@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928
 # Pick up Debian security fixes released after the pinned base image, and remove pip/ensurepip:
 # the app's dependencies come from uv.lock into /opt/venv, and pip's vendored libraries only add attack surface.
 RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/* \
