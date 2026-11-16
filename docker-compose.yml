@@ -218,8 +218,12 @@ services:
     volumes:
       - ./app/tests:/srv/app/tests:ro
       - ./db:/srv/db:ro
+      - ./collectors:/srv/collectors:ro    # the Mac collector is tested here against a synthetic chat.db
     working_dir: /srv/app
     networks: [db]
+    environment:
+      <<: *app-env
+      COVE_COLLECTORS_DIR: /srv/collectors
     command: ["sh", "-c", 'export COVE_TEST_DATABASE_URL="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432/cove_test"; exec pytest -q -p no:cacheprovider tests']
     depends_on:
       dbinit:
