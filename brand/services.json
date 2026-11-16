@@ -41,15 +41,15 @@
       "blurb": "Where it comes from and where it goes."
     },
     {
-      "key": "journal",
-      "name": "Journal",
-      "domain": "journal",
+      "key": "notes",
+      "name": "Notes",
+      "domain": "notes",
       "signal": "#A68CFF",
       "text": "#5638C2",
       "tone": "violet",
-      "path": null,
-      "status": "planned",
-      "blurb": "Thoughts worth keeping."
+      "path": "/notes",
+      "status": "live",
+      "blurb": "Everything you write: notes, ideas and journal entries, in sync with Obsidian."
     },
     {
       "key": "home",

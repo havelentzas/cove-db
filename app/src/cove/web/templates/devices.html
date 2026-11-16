@@ -1,0 +1,47 @@
+{% extends "notes_base.html" %}
+{% block title %}Devices{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">cove · settings</div>
+  <h1>Devices</h1>
+  <p class="lede">Each Obsidian install (or any sync client) gets its own token. Revoke one and that device stops syncing straight away.</p>
+</div></div>
+{% if new %}
+<div class="notice" role="status" style="display:block">
+  <strong>Token for “{{ new.name }}” — copy it now, it won't be shown again.</strong>
+  <div class="copyline" style="margin:var(--s3) 0 0"><code id="tok">{{ new.token }}</code><button class="secondary" type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('tok').textContent).then(()=>this.textContent='Copied')">Copy</button></div>
+  <p class="xs muted" style="margin:var(--s2) 0 0">Paste it into the cove-sync plugin settings along with this server's address.</p>
+</div>
+{% endif %}
+<div class="grid">
+  <section class="card">
+    <h2>Connected devices</h2>
+    {% if tokens %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Device</th><th>Created</th><th>Last sync</th><th></th></tr></thead>
+      <tbody>
+      {% for t in tokens %}
+      <tr {% if t.revoked_at %}style="opacity:.5"{% endif %}>
+        <td><strong>{{ t.name }}</strong><div class="xs muted mono">{{ t.scopes|join(', ') }}</div></td>
+        <td class="small">{{ t.created_at|d }}</td>
+        <td class="small">{{ t.last_used_at|dt or 'never' }}</td>
+        <td>{% if t.revoked_at %}<span class="chip">revoked</span>{% else %}
+          <form method="post" action="/settings/devices/{{ t.id }}/revoke" onsubmit="return confirm('Revoke {{ t.name }}? It will stop syncing.')"><button class="link xs">revoke</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="small muted" style="margin:0">No devices yet.</p>{% endif %}
+  </section>
+  <aside>
+    <section class="card accent">
+      <h2>Add a device</h2>
+      <form method="post" action="/settings/devices">
+        <label for="dname">Name</label>
+        <input id="dname" name="name" required placeholder="laptop, iphone…">
+        <div style="margin-top:var(--s3)"><button type="submit">{{ icon('plus') }}Create token</button></div>
+      </form>
+    </section>
+  </aside>
+</div>
+{% endblock %}

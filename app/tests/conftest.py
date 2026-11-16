@@ -22,9 +22,17 @@ def database():
     with psycopg.connect(url, autocommit=True) as c:
         c.execute("DROP SCHEMA IF EXISTS crm CASCADE")
         c.execute("DROP SCHEMA IF EXISTS meta CASCADE")
+        c.execute("DROP SCHEMA IF EXISTS notes CASCADE")
         for f in sorted(MIGRATIONS.glob("*.sql")):
             c.execute(_up_sql(f))
     from cove import db
     db.configure(url)
     yield url
     db.close()
+
+
+@pytest.fixture()
+def blobs(tmp_path, monkeypatch):
+    from cove.notes import service
+    monkeypatch.setattr(service, "BLOB_DIR", tmp_path / "blobs")
+    return tmp_path / "blobs"

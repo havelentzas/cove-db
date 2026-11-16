@@ -87,8 +87,11 @@ async def home(request: Request):
     from cove.web.app import pages  # shared Jinja environment
     cat = await catalog(request)
     counts = svc.describe_system()["counts"]
+    from cove.notes import service as notes
+    ns = notes.stats()
     stats = {"people": [(counts["active_contacts"], "people"), (counts["follow_ups_due"], "to reach out"),
-                        (counts["interactions"], "conversations")]}
+                        (counts["interactions"], "conversations")],
+             "notes": [(ns["notes"], "notes"), (ns["attachments"], "attachments"), (ns["devices"], "devices")]}
     return pages.TemplateResponse(request, "hub.html", {"cat": cat, "stats": stats, "svc": CORE})
 
 

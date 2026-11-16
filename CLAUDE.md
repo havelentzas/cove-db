@@ -2,7 +2,8 @@
 
 cove-db is the user's personal "life databases" system: Postgres in Docker, exposed to agents through
 one MCP server and to the user through a web UI. Each life area is a **domain** (a Postgres schema).
-The first domain is a personal CRM.
+Live domains: **People** (personal CRM, `crm` schema) and **Notes** (the user's Obsidian vault, synced
+two ways, `notes` schema; protocol in `docs/notes-sync.md`).
 
 ## Live context lives in the database, not here
 At the start of any session that touches data, call the MCP tools **`describe_system`** (domains, tables,
@@ -34,6 +35,10 @@ pastel washes and blurred shadows (the user rejected that look as "too AI"). Cop
 - `app/src/cove/crm/service.py` — **the only code that writes CRM data.** Web and MCP both call it, so
   validation (JSON Schema), optimistic locking (`version`) and audit logging (`meta.audit_log`, actor =
   `web[:<tailscale login>]` / `mcp:<client name>`) are identical. Add features here first, then expose them.
+- `app/src/cove/notes/service.py` — the only writer of notes (versions, 3-way merge, conflict copies,
+  tombstones, blobs, device tokens). `notes/markdown.py` parses and renders Obsidian Markdown (sanitized with nh3).
+- `app/src/cove/web/notes_api.py` — token-authenticated sync API `/api/notes/*`; `web/notes_web.py` — `/notes`
+  pages and `/settings/devices`.
 - `app/src/cove/crm/vcard.py` — JSContact ⇄ vCard (RFC 9555 subset). vCard import 3.0/4.0, export 4.0.
 - `app/src/cove/templating.py` — generic path-based form templates (domain-agnostic).
 - `app/src/cove/mcp_server.py` — thin async MCP adapter over the service layer.

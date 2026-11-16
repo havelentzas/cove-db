@@ -1,0 +1,50 @@
+{% extends "notes_base.html" %}
+{% block title %}{{ f.title }}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow"><a href="/notes" style="color:inherit;text-decoration:none">Notes</a>{% for c in crumbs %} / <a href="/notes?folder={{ crumbs[:loop.index]|join('/')|urlencode }}" style="color:inherit">{{ c }}</a>{% endfor %}</div>
+    <h1>{{ f.title }}</h1>
+    <p class="small muted" style="margin:var(--s2) 0 0">
+      {% for t in f.tags %}<a class="chip accent" href="/notes?tag={{ t|urlencode }}">#{{ t }}</a>{% endfor %}
+      <span class="mono xs">v{{ f.version }} · {{ f.updated_at|dt }} · {{ f.updated_by|who }}</span>
+    </p>
+  </div>
+  <div class="actions">
+    {% if f.kind == 'note' %}<a class="btn secondary" href="?raw={{ 0 if raw else 1 }}">{{ 'Reading view' if raw else 'Source' }}</a>{% endif %}
+    <a class="btn ghost" href="/notes/file/{{ f.id }}/raw" title="Download the exact file">{{ icon('download') }}.{{ f.path.rsplit('.',1)[-1] }}</a>
+  </div>
+</div>
+<div class="grid">
+  <article class="card">
+    {% if f.frontmatter %}
+    <dl class="props">
+      {% for k, v in f.frontmatter.items() if k not in ('tags', 'tag') %}
+      <dt>{{ k }}</dt><dd>{% if v is iterable and v is not string %}{% for x in v %}<span class="chip">{{ x }}</span>{% endfor %}{% else %}{{ v }}{% endif %}</dd>
+      {% endfor %}
+    </dl>
+    {% endif %}
+    {% if raw %}<pre class="source">{{ f.content }}</pre>{% else %}<div class="prose">{{ html|safe }}</div>{% endif %}
+  </article>
+  <aside>
+    <section class="card">
+      <h2>{{ icon('link') }} Linked from</h2>
+      {% if backlinks %}<ul class="list small">{% for b in backlinks %}<li><a class="list-item" style="padding:6px 4px" href="/notes/view/{{ b.id }}"><span class="grow"><span class="title">{{ b.title }}</span><span class="sub">{{ b.path }}</span></span></a></li>{% endfor %}</ul>
+      {% else %}<p class="small muted" style="margin:0">No other note links here yet.</p>{% endif %}
+    </section>
+    {% if outgoing %}
+    <section class="card">
+      <h2>Links out</h2>
+      <ul class="list small">{% for l in outgoing %}<li style="padding:5px 0">
+        {% if l.resolved %}<a href="/notes/view/{{ l.resolved.id }}">{{ l.alias or l.target }}</a>{% else %}<a class="muted" href="/notes/open?target={{ l.target|urlencode }}" style="text-decoration-style:dashed">{{ l.alias or l.target }}</a> <span class="xs muted">(not created)</span>{% endif %}
+      </li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+    <section class="card flat tight">
+      <div class="eyebrow" style="margin-bottom:var(--s3)">{{ icon('clock') }} History</div>
+      <ul class="list xs muted">{% for h in history %}<li style="padding:3px 0;border:0">v{{ h.version }} · {{ h.created_at|dt }} · {{ h.actor|who }}{% if h.deleted %} · deleted{% endif %}</li>{% endfor %}</ul>
+      <p class="xs muted" style="margin:var(--s2) 0 0 0">{{ f.path }}</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

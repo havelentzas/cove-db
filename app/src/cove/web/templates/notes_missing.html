@@ -1,0 +1,10 @@
+{% extends "notes_base.html" %}
+{% block title %}Not created yet{% endblock %}
+{% block body %}
+<div class="empty card" style="max-width:640px;margin:var(--s6) auto">
+  {{ MARK|safe }}
+  <div class="display">“{{ target }}” doesn't exist yet</div>
+  <p class="small">A note links here, but nothing in your vault has this name. Create it in Obsidian and it will show up after the next sync.</p>
+  <a class="btn secondary" href="/notes">Back to notes</a>
+</div>
+{% endblock %}

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from cove import brand
-from cove.web import hub
+from cove.web import hub, notes_api, notes_web
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -49,6 +49,8 @@ def _who(actor: str) -> str:
         return "you" + suffix
     if actor.startswith("mcp:"):
         return f"agent ({actor[4:]})"
+    if actor.startswith("device:"):
+        return f"device ({actor[7:]})"
     return actor
 
 
@@ -83,7 +85,8 @@ pages.env.filters["d"] = _short_d
 async def same_origin_posts(request: Request, call_next):
     """Reject cross-site form posts (the site has no login; this stops other web pages
     from submitting forms to it through your browser)."""
-    if request.method not in ("GET", "HEAD", "OPTIONS"):
+    bearer = request.url.path.startswith("/api/") and request.headers.get("authorization", "").startswith("Bearer ")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and not bearer:   # token auth isn't CSRF-able
         origin = request.headers.get("origin") or request.headers.get("referer")
         host = request.headers.get("x-forwarded-host") or request.headers.get("host")
         if origin and urlparse(origin).netloc != host:
@@ -375,6 +378,9 @@ def invalid(request: Request, exc: svc.Invalid):
 
 app.include_router(people)
 app.include_router(hub.router)
+app.include_router(notes_web.router)
+app.include_router(notes_web.settings)
+app.include_router(notes_api.router)
 
 
 @app.get("/healthz")

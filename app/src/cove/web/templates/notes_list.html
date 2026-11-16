@@ -1,0 +1,65 @@
+{% extends "notes_base.html" %}
+{% block title %}{% if q %}“{{ q }}”{% elif tag %}#{{ tag }}{% elif folder %}{{ folder }}{% else %}Notes{% endif %}{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div>
+    <div class="eyebrow">{{ svc.name }}</div>
+    <h1>{% if tag %}#{{ tag }}{% elif folder %}{{ folder }}{% else %}Notes{% endif %}</h1>
+    <p class="lede">{{ svc.blurb }}</p>
+  </div>
+</div>
+<div class="grid">
+  <section class="card">
+    <form action="/notes" method="get">
+      <div class="search">{{ icon('search') }}<input name="q" value="{{ q }}" type="search" placeholder="Search titles, text and aliases" aria-label="Search notes" autofocus></div>
+      {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+      {% if folder %}<input type="hidden" name="folder" value="{{ folder }}">{% endif %}
+    </form>
+    {% if tag or folder or q %}<p class="small" style="margin:var(--s3) 0 0"><a href="/notes">Clear filters</a></p>{% endif %}
+    <ul class="list" style="margin-top:var(--s3)">
+      {% for n in results %}
+      <li><a class="list-item" href="/notes/view/{{ n.id }}">
+        <span class="avatar" style="--size:38px">{{ n.title|initials if n.kind == 'note' else '▦' }}</span>
+        <span class="grow">
+          <span class="title">{{ n.title }}</span>
+          <span class="sub">{{ n.path }}</span>
+          {% if n.excerpt %}<span class="sub" style="white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ n.excerpt }}</span>{% endif %}
+        </span>
+        <span class="meta">{{ n.updated_at|d }}</span>
+      </a></li>
+      {% else %}
+      <li class="empty">
+        {{ MARK|safe }}
+        {% if q or tag or folder %}<div class="display">Nothing matches</div><p class="small">Try a different word, or <a href="/notes">see everything</a>.</p>
+        {% else %}<div class="display">No notes yet</div>
+        <p class="small">Connect your Obsidian vault from <a href="/settings/devices">Devices</a>, or ask an agent to write one.</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  <aside>
+    <section class="card accent">
+      <h2>In your vault</h2>
+      <div class="row" style="align-items:start">
+        <div><div class="stat">{{ stats.notes }}</div><div class="eyebrow">notes</div></div>
+        <div><div class="stat">{{ stats.attachments }}</div><div class="eyebrow">files</div></div>
+        <div><div class="stat">{{ stats.devices }}</div><div class="eyebrow">devices</div></div>
+      </div>
+    </section>
+    {% if folders %}
+    <section class="card">
+      <h2>Folders</h2>
+      <ul class="list small">
+        {% for f in folders %}<li><a class="list-item" style="padding:6px 4px" href="/notes?folder={{ f.folder|urlencode }}"><span class="grow">{{ f.folder or '(top level)' }}</span><span class="meta">{{ f.files }}</span></a></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+    {% if tags %}
+    <section class="card">
+      <h2>Tags</h2>
+      <div>{% for t in tags %}<a class="chip {{ 'accent' if t.tag == tag }}" href="/notes?tag={{ t.tag|urlencode }}">#{{ t.tag }} · {{ t.notes }}</a>{% endfor %}</div>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

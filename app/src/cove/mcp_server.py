@@ -17,9 +17,16 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from cove.crm import service as svc
+from cove.notes import service as notes
 
-INSTRUCTIONS = """cove-db holds the user's personal databases. Currently: a personal CRM (people, interactions,
-follow-up reminders, tags/groups, relationships). Contacts are JSContact (RFC 9553) cards.
+INSTRUCTIONS = """cove-db holds the user's personal databases: People (a personal CRM: contacts as JSContact cards,
+conversations, follow-up reminders, circles, relationships) and Notes (the user's Obsidian vault, synced both
+ways: notes, ideas and journal entries as Obsidian-flavoured Markdown).
+
+Don't confuse the two kinds of "notes": `read_notes`/`write_note` are YOUR durable memory about the user;
+`search_notes`/`get_note`/`create_note`/`update_note`/`append_to_note` work on the USER's own notes vault.
+Edits to the vault sync to the user's Obsidian devices, so keep their formatting and never rewrite a note
+wholesale when an append will do.
 
 Start a session with `describe_system` (domains, tables, counts) and `read_notes` (durable notes left by
 earlier agents about the user's preferences and conventions). When you learn something worth remembering
@@ -51,7 +58,7 @@ async def _call(fn, *args, **kwargs) -> Any:
         return await anyio.to_thread.run_sync(functools.partial(fn, *args, **kwargs))
     except svc.Conflict as e:
         raise ToolError(f"Version conflict: {e}. Current version is {e.current_version}.") from None
-    except (svc.NotFound, svc.Invalid) as e:
+    except (svc.NotFound, svc.Invalid, notes.PathTaken) as e:
         raise ToolError(str(e)) from None
 
 
@@ -203,6 +210,70 @@ async def relate_contacts(from_id: str, to_id: str, relation: str, ctx: Context,
 async def export_vcard(contact_ids: list[str] | None = None, tag: str | None = None) -> str:
     """Export contacts (all active, a list of ids, or one tag) as vCard 4.0 text."""
     return await _call(svc.export_vcard, contact_ids, tag)
+
+
+# ============================================================== Notes (the user's Obsidian vault)
+NOTES = {"service": "notes"}
+
+
+@mcp.tool(annotations=READ, meta=NOTES)
+async def search_notes(query: str | None = None, tag: str | None = None, folder: str | None = None,
+                       limit: int = 20) -> list[dict]:
+    """Search the user's notes vault by words in titles/text/aliases, a #tag (nested tags included) or a folder.
+    Returns paths, titles, tags and a short excerpt; use get_note for the full text."""
+    return await _call(notes.search, query, tag, folder, limit)
+
+
+@mcp.tool(annotations=READ, meta=NOTES)
+async def get_note(note: str) -> dict:
+    """Read one note by id, vault path ("Projects/Plan.md") or link name ("Plan"). Returns the raw Markdown
+    `content`, frontmatter, tags, `version` (needed for update_note), backlinks and outgoing links."""
+    async def run():
+        f = await _call(notes.find, note)
+        f["backlinks"] = await _call(notes.backlinks, f["id"])
+        f["links"] = [{"target": l["target"], "resolved_path": (l["resolved"] or {}).get("path")}
+                      for l in await _call(notes.outgoing, f["id"])]
+        return f
+    return await run()
+
+
+@mcp.tool(annotations=WRITE, meta=NOTES)
+async def create_note(path: str, content: str, ctx: Context) -> dict:
+    """Create a new note at a vault path ("Inbox/Idea.md"; .md is added if missing). Use Obsidian Markdown:
+    YAML frontmatter, [[wikilinks]], #tags. Fails if a note already exists at that path."""
+    res = await _call(notes.create_note, path, content, _actor(ctx))
+    if res["status"] != "created":
+        raise ToolError(f"a note already exists at {path!r}; use update_note or append_to_note")
+    return res["file"]
+
+
+@mcp.tool(annotations=WRITE, meta=NOTES)
+async def update_note(note: str, content: str, expected_version: int, ctx: Context) -> dict:
+    """Replace a note's full text. expected_version is the version from get_note. If the user edited the note
+    meanwhile, non-overlapping changes are merged; overlapping ones are saved as a "(conflict …)" copy and
+    reported. Prefer append_to_note for additions."""
+    async def run():
+        f = await _call(notes.find, note, with_content=False)
+        return await _call(notes.put_text, f["id"], f["path"], content, expected_version, _actor(ctx))
+    res = await run()
+    return {k: v for k, v in res.items() if k != "content"}
+
+
+@mcp.tool(annotations=WRITE, meta=NOTES)
+async def append_to_note(note: str, text: str, ctx: Context, heading: str | None = None,
+                         create_if_missing: bool = True) -> dict:
+    """Append Markdown to a note (by id, path or name), optionally at the end of a heading's section
+    (the heading is created if absent). Creates the note if it doesn't exist. Safe to use while the user
+    is editing: concurrent edits are merged."""
+    res = await _call(notes.append, note, text, _actor(ctx), heading, create_if_missing)
+    return {"status": res["status"], "file": res["file"]}
+
+
+@mcp.tool(annotations=READ, meta=NOTES)
+async def note_backlinks(note: str) -> list[dict]:
+    """Notes that link to this note (by id, path or name)."""
+    f = await _call(notes.find, note, with_content=False)
+    return await _call(notes.backlinks, f["id"])
 
 
 def main() -> None:

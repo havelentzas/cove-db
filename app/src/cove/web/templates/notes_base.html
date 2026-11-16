@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block nav %}
+  <a href="/notes" {% if request.url.path == '/notes' %}aria-current="page"{% endif %}>All notes</a>
+  <a href="/settings/devices" {% if request.url.path.startswith('/settings') %}aria-current="page"{% endif %}>Devices</a>
+{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}<a href="/" class="muted" style="text-decoration:none">{{ icon('arrow-left') }} All services</a>{% endblock %}
