@@ -1,0 +1,33 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create throwaway secrets
+        run: sh scripts/init-secrets.sh && cp .env.example .env
+      - name: Build
+        run: docker compose build web
+      - name: Server tests
+        run: docker compose --profile test run --rm test
+      - name: Obsidian plugin integration tests
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/obsidian-plugin":/work -w /work node:22-alpine npm ci
+          sh obsidian-plugin/test/run-integration.sh
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: pip-audit (Python lockfile)
+        working-directory: app
+        run: uv export --frozen --no-hashes --no-emit-project --format requirements-txt -q > /tmp/req.txt && uvx pip-audit -r /tmp/req.txt
+      - name: npm audit (plugin)
+        working-directory: obsidian-plugin
+        run: npm ci && npm audit --audit-level=high
+      - name: gitleaks (secret scan)
+        run: docker run --rm -v "$PWD":/repo zricethezav/gitleaks:latest detect --source /repo --no-banner
