@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -180,7 +180,7 @@ requires-dist = [
     { name = "mdit-py-plugins", specifier = ">=0.4" },
     { name = "merge3", specifier = ">=0.0.15" },
     { name = "nh3", specifier = ">=0.2.17" },
-    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.9" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "python-multipart", specifier = ">=0.0.12" },
     { name = "pyyaml", specifier = ">=6.0" },
