@@ -20,7 +20,10 @@ Please **don't open a public issue.** Use GitHub's private vulnerability reporti
 - **Sign-in:** passkeys only, through a self-hosted Pocket ID (invite-only, user verification required).
   The web UI is deny-by-default: server-side sessions (`__Host-` cookie, HMAC-stored tokens, 7-day idle and
   30-day absolute limits), CSRF tokens on every form, and an admin page with a security event log.
-  See `docs/auth.md`. The MCP server isn't behind sign-in yet (scoped tokens are next).
+  See `docs/auth.md`.
+- **Permissions:** workspace roles (owner, editor, viewer) and token scopes, checked in one place at the
+  service layer. The MCP server requires a per-agent personal access token, lists only the tools that
+  token allows, and agents can't delete anything.
 - **Sync API:** `/api/notes/*` requires per-device bearer tokens. They are shown once, stored hashed, and
   revocable at `/settings/devices`.
 - **Data integrity:**
@@ -41,6 +44,6 @@ Please **don't open a public issue.** Use GitHub's private vulnerability reporti
 
 ## In progress
 A security overhaul is underway:
-- scoped tokens and OAuth 2.1 for MCP
+- OAuth 2.1 for remote MCP connectors
 
 Until that's complete, cove must **not** be exposed to the public internet.

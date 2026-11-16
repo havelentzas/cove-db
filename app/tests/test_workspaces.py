@@ -56,7 +56,8 @@ def real(database, monkeypatch, tmp_path):
 
 
 def principal(ws: dict) -> context.Principal:
-    return context.Principal(actor="web:test", workspace=workspaces.as_context(ws))
+    from cove.auth import policy
+    return context.Principal(actor="web:test", workspace=workspaces.as_context(ws), scopes=policy.ALL)
 
 
 def card(name: str) -> dict:

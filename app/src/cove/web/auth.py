@@ -25,7 +25,7 @@ from markupsafe import Markup, escape
 from starlette.concurrency import run_in_threadpool
 
 from cove import context
-from cove.auth import oidc, sessions, tokens
+from cove.auth import oidc, policy, sessions, tokens
 from cove.control import identity, workspaces
 
 PUBLIC_PATHS = {"/healthz", "/login", "/auth/start", "/auth/callback"}
@@ -72,13 +72,15 @@ async def middleware(request: Request, call_next):
 
     if path.startswith(TOKEN_PREFIXES):
         auth = request.headers.get("authorization", "")
-        dev = await run_in_threadpool(tokens.verify, auth.removeprefix("Bearer ").strip()) if auth else None
+        dev = await run_in_threadpool(tokens.verify, auth.removeprefix("Bearer ").strip(), "device") if auth else None
         if not dev:
             return JSONResponse({"detail": "missing or invalid device token"}, status_code=401,
                                 headers={"WWW-Authenticate": "Bearer"})
+        if "notes:sync" not in dev["effective"]:
+            return JSONResponse({"detail": "this token may not sync notes"}, status_code=403)
         request.state.device = dev
         context.set_current(context.Principal(actor=f"device:{dev['name']}", workspace=dev["workspace"],
-                                              user_id=dev["user_id"], scopes=frozenset(dev["scopes"])))
+                                              user_id=dev["user_id"], role=dev["role"], scopes=dev["effective"]))
         return await call_next(request)
 
     token = request.cookies.get(sessions.COOKIE)
@@ -117,7 +119,8 @@ async def middleware(request: Request, call_next):
         return await call_next(request)
     request.state.workspace = ws
     context.set_current(context.Principal(actor=f"web:{session['username']}", workspace=workspaces.as_context(ws),
-                                          user_id=session["id"], role=ws["role"]))
+                                          user_id=session["id"], role=ws["role"],
+                                          scopes=policy.effective(ws["role"], None)))
     return await call_next(request)
 
 

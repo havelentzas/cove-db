@@ -11,6 +11,9 @@ Provisioning creates, for a workspace with id <id> (first 12 hex digits of its u
     python -m cove.control.workspaces create <slug> <name> [--owner <username>]
     python -m cove.control.workspaces adopt <existing-db> <slug> <name> [--owner <username>]
     python -m cove.control.workspaces add-member <slug> <username> [owner|editor|viewer]
+    python -m cove.control.workspaces token <slug> <name> [--scopes a,b,…]
+        an agent token made by the admin (before anyone can sign in, or for automation); default
+        scopes are read-only plus agent memory. Printed once.
 
 `adopt` turns an existing single-tenant database (the original `cove`) into a workspace by renaming it,
 then moves its device tokens into cove_control and its attachments into the workspace's blob folder.
@@ -167,8 +170,31 @@ def add_member(slug: str, username: str, role: str = "editor") -> None:
                     "ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role", (ws["id"], user["id"], role))
 
 
+def admin_token(slug: str, name: str, scopes: list[str] | None = None) -> str:
+    from cove.auth import policy, tokens
+    wanted = policy.expand(scopes) if scopes else policy.DEFAULT_AGENT_SCOPES
+    if not wanted:
+        raise Invalid(f"unknown scopes; choose from {', '.join(sorted(policy.ALL))}")
+    token = tokens.PREFIXES["personal"] + __import__("secrets").token_urlsafe(32)
+    with migrate._connect(CONTROL_DB) as ctl:
+        ws = ctl.execute("SELECT id FROM control.workspaces WHERE slug = %s", (slug,)).fetchone()
+        if not ws:
+            raise NotFound(f"no workspace '{slug}'")
+        tid = ctl.execute("INSERT INTO control.api_tokens (workspace_id, kind, name, token_hash, scopes) "
+                          "VALUES (%s, 'personal', %s, %s, %s) RETURNING id",
+                          (ws["id"], name, tokens._hmac(token), sorted(wanted))).fetchone()["id"]
+        ctl.execute("INSERT INTO control.security_events (kind, detail) VALUES ('token_created', %s)",
+                    (__import__("json").dumps({"token_id": tid, "name": name, "by": "admin-cli", "workspace": slug}),))
+    return token
+
+
 def _main(argv: list[str]) -> int:
     owner = None
+    scopes = None
+    if "--scopes" in argv:
+        i = argv.index("--scopes")
+        scopes = [x.strip() for x in argv[i + 1].split(",") if x.strip()]
+        argv = argv[:i] + argv[i + 2:]
     if "--owner" in argv:
         i = argv.index("--owner")
         owner = argv[i + 1]
@@ -182,6 +208,8 @@ def _main(argv: list[str]) -> int:
             print(create(slug, name, owner))
         case ["adopt", existing, slug, name]:
             print(adopt(existing, slug, name, owner))
+        case ["token", slug, name]:
+            print(admin_token(slug, name, scopes))
         case ["add-member", slug, username, *role]:
             add_member(slug, username, *(role or ["editor"]))
         case _:

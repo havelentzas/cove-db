@@ -1,7 +1,7 @@
 """Who is acting, and in which workspace, for the current request or tool call.
 
-Set once per request by the web auth middleware (signed-in user or device token) and per process by the
-MCP server; read by `cove.db` to choose the workspace database. Nothing chooses a workspace on its own: if
+Set once per request by the web auth middleware (signed-in user or device token) and by the MCP server's
+token middleware; read by `cove.db` to choose the workspace database and by `cove.auth.policy`. Nothing chooses a workspace on its own: if
 no principal is set, database access fails closed.
 """
 
@@ -31,16 +31,15 @@ class Principal:
     actor: str             # audit label: web:<username>, device:<name>, mcp:<client>
     workspace: Workspace
     user_id: str | None = None
-    role: str = "owner"    # membership role (owner / editor / viewer); enforced from Phase 4
-    scopes: frozenset[str] = field(default_factory=frozenset)
+    role: str = "owner"    # membership role (owner / editor / viewer)
+    scopes: frozenset[str] = field(default_factory=frozenset)   # effective: role ∩ token (cove.auth.policy)
 
 
 _current: ContextVar[Principal | None] = ContextVar("cove_principal", default=None)
-_process_default: Principal | None = None   # MCP server only (until it has per-token principals)
 
 
 def current() -> Principal | None:
-    return _current.get() or _process_default
+    return _current.get()
 
 
 def require() -> Principal:
@@ -62,7 +61,3 @@ def use(principal: Principal) -> Iterator[Principal]:
     finally:
         _current.reset(token)
 
-
-def set_process_default(principal: Principal | None) -> None:
-    global _process_default
-    _process_default = principal

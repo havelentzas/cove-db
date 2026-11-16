@@ -106,7 +106,6 @@ services:
     environment:
       <<: *app-env
       COVE_MCP_EXTRA_HOSTS: ${COVE_MCP_EXTRA_HOSTS:-}
-      COVE_MCP_WORKSPACE: ${COVE_MCP_WORKSPACE:-}     # slug; MCP works in this one workspace until Phase 4
     ports:
       - "127.0.0.1:8765:8765"
     depends_on:

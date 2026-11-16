@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+{% block nav %}<a href="/">Services</a><a href="/settings/agents" aria-current="page">Agents</a><a href="/settings/devices">Devices</a><a href="/account">Account</a>{% endblock %}
+{% block header_action %}{% endblock %}
+{% block footer_action %}{% endblock %}
+{% block body %}
+<div class="page-head"><div>
+  <div class="eyebrow">cove · {{ request.state.workspace.name }} · agents</div>
+  <h1>Agents</h1>
+  <p class="lede">Give each agent (Claude Code, a script, a connector) its own token. Its changes show up as “agent (name)” in history, and you can switch it off on its own.</p>
+</div></div>
+{% if error %}<div class="notice error" role="alert"><strong>Couldn't create that token.</strong> {{ error }}</div>{% endif %}
+{% if new %}
+<div class="notice" role="status" style="display:block">
+  <strong>Token for “{{ new.name }}”: copy it now, it won't be shown again.</strong>
+  <div class="copyline" style="margin:var(--s3) 0 0"><code id="tok">{{ new.token }}</code><button class="secondary" type="button" data-copy-from="tok">Copy</button></div>
+  <p class="xs muted" style="margin:var(--s3) 0 var(--s1)">Add cove to Claude Code with it:</p>
+  <div class="copyline"><code id="cmd">claude mcp add --scope user --transport http cove {{ mcp_url }} --header "Authorization: Bearer {{ new.token }}"</code><button class="secondary" type="button" data-copy-from="cmd">Copy</button></div>
+</div>
+{% endif %}
+<div class="grid">
+  <section class="card">
+    <h2>Agent tokens</h2>
+    {% if tokens %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Agent</th><th>Can</th><th>Last used</th><th></th></tr></thead>
+      <tbody>
+      {% for t in tokens %}
+      <tr {% if t.revoked_at %}style="opacity:.5"{% endif %}>
+        <td><strong>{{ t.name }}</strong><div class="xs muted mono">{{ t.username or 'admin' }} · {{ t.created_at|d }}{% if t.expires_at %} · expires {{ t.expires_at|d }}{% endif %}</div></td>
+        <td>{% for s in t.scopes %}<span class="chip">{{ s }}</span> {% endfor %}</td>
+        <td class="small">{{ t.last_used_at|dt or 'never' }}</td>
+        <td>{% if t.revoked_at %}<span class="chip">revoked</span>{% else %}
+          <form method="post" action="/settings/agents/{{ t.id }}/revoke" data-confirm="Revoke {{ t.name }}? It stops working at once.">{{ csrf_field() }}<button class="link xs">revoke</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="small muted" style="margin:0">No agents yet.</p>{% endif %}
+  </section>
+  <aside>
+    <section class="card accent">
+      <h2>{{ icon('plus') }} New agent token</h2>
+      <form method="post" action="/settings/agents">{{ csrf_field() }}
+        <label for="aname">Name</label>
+        <input id="aname" name="name" required placeholder="claude-code, morning-brief…">
+        <fieldset style="border:0;padding:0;margin:var(--s3) 0">
+          <legend class="label">It can</legend>
+          {% for key, label in scopes.items() if key != 'notes:sync' %}
+          <label class="toggle-chip" style="margin:0 var(--s1) var(--s1) 0" title="{{ label }}">
+            <input type="checkbox" name="scope" value="{{ key }}" {% if key in defaults %}checked{% endif %} {% if key not in mine %}disabled{% endif %}>{{ label }}</label>
+          {% endfor %}
+        </fieldset>
+        <label for="aexp">Expires after (days, optional)</label>
+        <input id="aexp" name="expires_days" inputmode="numeric" placeholder="90">
+        <div style="margin-top:var(--s3)"><button type="submit">Create token</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>{{ icon('shield') }} Good to know</h2>
+      <ul class="small" style="padding-left:1.1em;margin:0">
+        <li>Read-only is the default. Tick write permissions only for agents that need them.</li>
+        <li>Agents can't delete anything: archiving and edits are kept in history.</li>
+        <li>“Run SQL” lets an agent read everything in this workspace at once.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,5 +1,9 @@
 {
   "mcpServers": {
-    "cove": { "type": "http", "url": "http://127.0.0.1:8765/mcp" }
+    "cove": {
+      "type": "http",
+      "url": "http://127.0.0.1:8765/mcp",
+      "headers": { "Authorization": "Bearer ${COVE_MCP_TOKEN}" }
+    }
   }
 }

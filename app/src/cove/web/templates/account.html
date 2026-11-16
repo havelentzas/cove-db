@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Your account{% endblock %}
-{% block nav %}<a href="/">Services</a><a href="/account" aria-current="page">Account</a>{% if me.is_admin %}<a href="/admin">Admin</a>{% endif %}{% endblock %}
+{% block nav %}<a href="/">Services</a><a href="/account" aria-current="page">Account</a><a href="/settings/agents">Agents</a><a href="/settings/devices">Devices</a>{% if me.is_admin %}<a href="/admin">Admin</a>{% endif %}{% endblock %}
 {% block header_action %}{% endblock %}
 {% block footer_action %}{% endblock %}
 {% block body %}

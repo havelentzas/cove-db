@@ -24,15 +24,15 @@
       {% for u in cat.mcp.urls %}
       <div class="copyline"><code>{{ u }}</code><button class="secondary" type="button" data-copy="{{ u }}">Copy</button></div>
       {% endfor %}
-      <p class="xs muted" style="margin:0 0 var(--s2)">One MCP server serves every service ({{ cat.mcp.transport }}). Add it to Claude Code:</p>
-      <div class="copyline"><code>claude mcp add --scope user --transport http cove {{ cat.mcp.urls[-1] }}</code><button class="secondary" type="button" data-copy="claude mcp add --scope user --transport http cove {{ cat.mcp.urls[-1] }}">Copy</button></div>
+      <p class="xs muted" style="margin:0 0 var(--s2)">One MCP server serves every service ({{ cat.mcp.transport }}). Each agent needs its own token: <a href="/settings/agents">create one under Agents</a>, which also gives you the exact command. For Claude Code it looks like:</p>
+      <div class="copyline"><code>claude mcp add --scope user --transport http cove {{ cat.mcp.urls[-1] }} --header "Authorization: Bearer cove_pat_…"</code></div>
 
       <h3>MCP tools · {{ s.mcp_tools|length }}</h3>
       {% for t in s.mcp_tools %}
       <div class="endpoint">
         <span class="method {{ 'read' if t.read_only else ('danger' if t.destructive else 'write') }}">{{ 'read' if t.read_only else 'write' }}</span>
         <span class="sig">{{ t.name }}(<span class="opt">{% for p in t.params %}{% if p.required %}<b style="color:var(--ink)">{{ p.name }}</b>{% else %}{{ p.name }}?{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</span>)</span>
-        <span class="desc">{{ t.summary }}</span>
+        <span class="desc">{{ t.summary }}{% if t.scope %} <span class="chip">{{ t.scope }}</span>{% endif %}</span>
       </div>
       {% else %}<p class="small muted">No MCP tools.</p>{% endfor %}
 

@@ -703,3 +703,16 @@ def folder(path: str) -> dict | None:
         if node is None:
             return None
     return node
+
+
+# ================================================================== authorization
+# Every public function is checked against the caller's scopes (cove.auth.policy); a test fails if one is missing.
+from cove.auth import policy as _policy  # noqa: E402
+
+_policy.guard(__name__, {
+    _policy.PURE: ["sha256", "normalize_path", "kind_for", "guess_mime"],
+    "notes:read": ["has_blob", "blob_file", "get", "get_by_path", "find", "changes", "manifest", "resolve",
+                   "backlinks", "outgoing", "search", "folders", "tags", "history", "stats", "graph", "tree",
+                   "folder"],
+    "notes:write": ["put_text", "put_attachment", "rename", "delete", "store_blob", "create_note", "append"],
+})

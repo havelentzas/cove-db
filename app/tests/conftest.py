@@ -43,7 +43,8 @@ def database():
     with psycopg.connect(url, autocommit=True) as c:
         c.execute("INSERT INTO control.workspaces (id, slug, name, db_name, role_name, status) VALUES "
                   "(%s, 'test', 'Test', 'cove_test', 'test_ws', 'active')", (TEST_WS.id,))
-    token = context.set_current(context.Principal(actor="web:test", workspace=TEST_WS))
+    from cove.auth import policy
+    token = context.set_current(context.Principal(actor="web:test", workspace=TEST_WS, scopes=policy.ALL))
     yield url
     context._current.reset(token)
     db.close()
@@ -59,7 +60,7 @@ def blobs(tmp_path, monkeypatch):
 class Browser:
     """A signed-in browser: TestClient with a session cookie, plus the session's CSRF token."""
 
-    def __init__(self, username="harry", admin=None, workspace=True):
+    def __init__(self, username="harry", admin=None, workspace=True, role="owner"):
         from fastapi.testclient import TestClient
         from cove.auth import sessions
         from cove.control import identity
@@ -68,8 +69,9 @@ class Browser:
                                      {"preferred_username": username, "name": username.title()}, ip=None, user_agent="pytest")
         if workspace:
             with __import__("cove").db.ctl_conn() as c:
-                c.execute("INSERT INTO control.memberships (workspace_id, user_id, role) VALUES (%s, %s, 'owner') "
-                          "ON CONFLICT DO NOTHING", (TEST_WS.id, self.user["id"]))
+                c.execute("INSERT INTO control.memberships (workspace_id, user_id, role) VALUES (%s, %s, %s) "
+                          "ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role",
+                          (TEST_WS.id, self.user["id"], role))
         if admin is not None:
             with __import__("cove").db.ctl_conn() as c:
                 c.execute("UPDATE control.users SET is_admin=%s WHERE id=%s", (admin, self.user["id"]))

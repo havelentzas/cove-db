@@ -9,14 +9,15 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 from fastapi import APIRouter, FastAPI, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
 from cove import brand, context
-from cove.web import auth, hub, notes_api, notes_web, security
+from cove.auth import policy
+from cove.web import agents, auth, hub, notes_api, notes_web, security
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
 
@@ -389,12 +390,21 @@ def not_found(request: Request, exc: svc.NotFound):
     return PlainTextResponse(str(exc), status_code=404)
 
 
+@app.exception_handler(policy.Forbidden)
+def forbidden(request: Request, exc: policy.Forbidden):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": str(exc)}, status_code=403)
+    return PlainTextResponse(f"You don't have permission to do that here ({exc}). Ask the workspace owner.",
+                             status_code=403)
+
+
 @app.exception_handler(svc.Invalid)
 def invalid(request: Request, exc: svc.Invalid):
     return PlainTextResponse(f"Invalid input: {exc}", status_code=422)
 
 
 app.include_router(auth.router)
+app.include_router(agents.router)
 app.include_router(people)
 app.include_router(hub.router)
 app.include_router(notes_web.router)

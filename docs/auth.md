@@ -35,8 +35,35 @@ browser ──► cove /login ──► Pocket ID /authorize (passkey) ──►
   user created, login, failed login, CSRF rejected, session revoked, user disabled, and admin granted or revoked.
 - **Rate limits:** sign-in routes allow 30 requests per minute per IP.
 
-Not covered yet: the MCP server has no authentication of its own until Phase 4/5 (scoped tokens, then
-OAuth 2.1). Until then it relies on being reachable only on localhost and the tailnet.
+## Permissions
+- **Workspace roles:** owner and editor can read and write; viewer can only read.
+- **Scopes** (`cove/auth/policy.py`): `people:read`, `people:write`, `notes:read`, `notes:write`, `notes:sync`,
+  `system:memory`, `system:sql`. What a request may do is its role's scopes, narrowed by its token's scopes.
+  A token can never do more than its user's role, and if that user is demoted or removed, the token loses
+  access immediately.
+- **One check, at the service layer:** every public function in `crm/service.py` and `notes/service.py` is
+  wrapped by `policy.guard`, so the web UI, the sync API and MCP get the same check. A test fails if a
+  function isn't covered.
+
+## Agents (MCP)
+- Every MCP request needs `Authorization: Bearer cove_pat_…`, a personal access token created at
+  **/settings/agents**. The token chooses the workspace, labels the agent's changes in history
+  (`agent (name)`), and decides which tools it sees: `tools/list` only shows permitted tools, and calls to
+  others are refused.
+- New agent tokens are read-only plus the agent's own memory (`system:memory`). Write scopes and `system:sql`
+  have to be ticked explicitly. Tokens can expire.
+- **Prompt-injection hygiene:**
+  - the server tells agents that stored content is data, not instructions
+  - agents have no delete tools
+  - multi-contact calls are capped at 100 contacts
+  - SQL is read-only and off by default
+- **Before anyone can sign in** (or for automation), an admin can create a token from the shell:
+  `docker compose run --rm migrate python -m cove.control.workspaces token <workspace> <name> [--scopes a,b]`.
+- Claude Code: `claude mcp add --scope user --transport http cove <url> --header "Authorization: Bearer <token>"`.
+  In this repo, `.mcp.json` reads the token from `$COVE_MCP_TOKEN`.
+
+Coming in Phase 5: OAuth 2.1 for remote connectors (claude.ai), with sign-in and consent instead of
+pasted tokens.
 
 ## Setup
 1. In `.env`, set where your browser reaches each service:

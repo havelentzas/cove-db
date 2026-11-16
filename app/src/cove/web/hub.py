@@ -30,9 +30,9 @@ def mcp_urls() -> list[str]:
 
 
 async def _mcp_tools() -> list[dict]:
-    from cove.mcp_server import mcp  # importing only registers tools; it does not start a server
+    from cove.mcp_server import TOOL_SCOPES, mcp  # importing only registers tools; it does not start a server
     out = []
-    for t in await mcp.list_tools():
+    for t in await mcp.all_tools():
         meta = getattr(t, "meta", None) or {}
         service = meta.get("service") or ("core" if t.name in CORE_TOOLS else "people")
         schema = t.input_schema or {}
@@ -45,6 +45,7 @@ async def _mcp_tools() -> list[dict]:
             "summary": (t.description or "").strip().split("\n\n")[0].replace("\n", " "),
             "params": params,
             "read_only": bool(ann and ann.read_only_hint),
+            "scope": TOOL_SCOPES.get(t.name),
             "destructive": bool(ann and ann.destructive_hint),
         })
     return out

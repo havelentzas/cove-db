@@ -184,7 +184,7 @@ def plugin_version() -> str | None:
 @settings.get("/settings/devices", response_class=HTMLResponse)
 def devices(request: Request):
     return _pages().TemplateResponse(request, "devices.html", {**_ctx(), "svc": {"key": "", "name": "cove"},
-                                                               "tokens": notes.list_tokens(), "new": None,
+                                                               "tokens": notes.list_tokens("device"), "new": None,
                                                                "plugin_version": plugin_version()})
 
 
@@ -192,7 +192,7 @@ def devices(request: Request):
 def create_device(request: Request, name: str = Form(...)):
     new = notes.create_token(name, _actor(request))
     return _pages().TemplateResponse(request, "devices.html", {**_ctx(), "svc": {"key": "", "name": "cove"},
-                                                               "tokens": notes.list_tokens(), "new": new,
+                                                               "tokens": notes.list_tokens("device"), "new": new,
                                                                "plugin_version": plugin_version()})
 
 

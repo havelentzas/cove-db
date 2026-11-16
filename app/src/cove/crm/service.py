@@ -658,3 +658,20 @@ def audit_trail(entity_id: Any, limit: int = 20) -> list[dict]:
     with db.conn() as c:
         return _plain(c.execute("SELECT at, actor, action, diff FROM meta.audit_log WHERE entity_id=%s "
                                 "ORDER BY at DESC LIMIT %s", (str(entity_id), limit)).fetchall())
+
+
+# ================================================================== authorization
+# Every public function is checked against the caller's scopes (cove.auth.policy); a test fails if one is missing.
+from cove.auth import policy as _policy  # noqa: E402
+
+_policy.guard(__name__, {
+    _policy.PURE: ["validate_card", "merge_patch", "build_card"],
+    None: ["describe_system"],
+    "people:read": ["get_contact", "search_contacts", "list_interactions", "follow_ups_due", "list_tags",
+                    "export_vcard", "preview_import", "audit_trail"],
+    "people:write": ["create_contact", "update_contact", "replace_card", "archive_contact", "log_interaction",
+                     "delete_interaction", "set_follow_up", "tag_contacts", "untag_contacts", "set_contact_tags",
+                     "update_tag", "delete_tag", "relate_contacts", "delete_relationship", "import_cards"],
+    "system:memory": ["read_notes", "write_note", "delete_note"],
+    "system:sql": ["sql_query"],
+})

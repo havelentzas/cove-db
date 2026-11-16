@@ -31,9 +31,10 @@ docker compose --profile test run --rm test
 ```
 - Web UI: sign in with a passkey (`docs/auth.md`). To reach it from other devices on your tailnet, run
   `tailscale serve --bg --https=443 http://127.0.0.1:8080`.
-- MCP: `http://127.0.0.1:8765/mcp`. To reach it over your tailnet, set `COVE_MCP_EXTRA_HOSTS=<machine>.<tailnet>.ts.net` in `.env`
+- MCP: `http://127.0.0.1:8765/mcp`, with a personal access token per agent (create one at `/settings/agents`;
+  `.mcp.json` reads it from `$COVE_MCP_TOKEN`). To reach it over your tailnet, set `COVE_MCP_EXTRA_HOSTS=<machine>.<tailnet>.ts.net` in `.env`
   and run `tailscale serve --bg --https=8443 http://127.0.0.1:8765`. `.mcp.json` registers it for Claude Code in this folder. To use it
-  from any folder, run `claude mcp add --scope user --transport http cove http://127.0.0.1:8765/mcp`.
+  from any folder, run `claude mcp add --scope user --transport http cove http://127.0.0.1:8765/mcp --header "Authorization: Bearer <token>"`.
 
 ## Reusable pieces
 - `schemas/jscontact-card.schema.json`: JSON Schema for the JSContact subset used here. Vendor

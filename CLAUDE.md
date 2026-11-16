@@ -8,12 +8,18 @@ two ways, `notes` schema; protocol in `docs/notes-sync.md`).
 ## Workspaces (one database each)
 Each workspace is its own database `cove_ws_<id>` with roles `ws_<id>` / `ws_<id>_ro`. Every request runs as a
 `cove.context.Principal` bound to one workspace (set by `web/auth.py` from the session or device token; MCP uses
-`COVE_MCP_WORKSPACE` until Phase 4). `db.conn()` / `db.ro_conn()` connect to the current workspace and
+its personal access token). `db.conn()` / `db.ro_conn()` connect to the current workspace and
 `SET ROLE` into its role; with no principal they raise `NoWorkspace`. So service code never names a database:
 it just calls `db.conn()`. Anything cached in-process must be keyed by workspace (see `notes._cached`).
 Migrations in `db/migrations` grant to `cove_app`/`cove_readonly` as before; the migrator moves those grants onto
 each workspace's roles. Provision with `docker compose run --rm migrate python -m cove.control.workspaces
 create <slug> "<name>" --owner <username>` (also `list`, `add-member`, `adopt`). Control tables: `db/control`.
+
+## Permissions (must stay complete)
+`cove/auth/policy.py` has the scopes. Every **public function in a service module** must be listed in the
+`policy.guard(...)` table at the bottom of that module (with its scope, `None` for any member, or `PURE`), and
+every **MCP tool** must be in `TOOL_SCOPES` in `mcp_server.py`. `tests/test_policy.py` fails otherwise. MCP
+requests authenticate with a `cove_pat_` token (`/settings/agents`); the token's name is the agent's actor label.
 
 ## Live context lives in the database, not here
 At the start of any session that touches data, call the MCP tools **`describe_system`** (domains, tables,
