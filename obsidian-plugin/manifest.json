@@ -1,0 +1,9 @@
+{
+  "id": "cove-sync",
+  "name": "cove sync",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Two-way sync between this vault and cove Notes (your self-hosted cove-db server).",
+  "author": "Harry",
+  "isDesktopOnly": false
+}

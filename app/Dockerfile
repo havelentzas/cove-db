@@ -11,6 +11,7 @@ COPY app/src ./src
 RUN uv sync
 COPY schemas /srv/schemas
 COPY brand /srv/brand
+COPY obsidian-plugin/main.js obsidian-plugin/manifest.json obsidian-plugin/styles.css /srv/obsidian-plugin/
 COPY templates /srv/templates
 COPY db/migrations /srv/db/migrations
 RUN useradd --system --uid 10001 cove && mkdir -p /data/blobs && chown -R cove /data

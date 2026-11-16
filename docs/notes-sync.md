@@ -1,7 +1,7 @@
 # Notes sync protocol (v1)
 
 The server side of two-way sync between cove **Notes** and an Obsidian vault. The `cove-sync`
-Obsidian plugin (next milestone) is the main client, but any client can use this API.
+Obsidian plugin (`obsidian-plugin/`) is the reference client, but any client can use this API.
 
 - **Base URL:** `https://<tailnet-host>/api/notes`, or `http://127.0.0.1:8080/api/notes` locally.
 - **Auth:** `Authorization: Bearer cove_…`. Create a token per device at `/settings/devices`.
@@ -74,11 +74,20 @@ Every write returns `{status, file, …}`:
 6. **Offline:** the outbox persists across restarts and is replayed when the server is reachable again. Client-chosen ids make replays safe.
 
 ### First sync
-Fetch `/manifest`, then match local files by path:
+Fetch `/manifest`, then match local files by path (case-insensitive):
 - **Same hash:** adopt the server's id and version.
-- **Different hash:** push with `base_version` = the server's version. Your copy wins, and the old one stays in history.
+- **Different hash:** push with **no** `base_version`. The server keeps its copy and saves yours as a
+  `(conflict …)` copy; the client then downloads the server's version. A device joining with a stale vault
+  never overwrites cove.
 - **Only on the server:** download it.
 - **Only local:** create it.
+
+Then set `lastSeq` to the manifest's `head_seq` and pull as usual.
+
+## Echo suppression
+The client's own writes, renames and trash moves fire vault events too. Content writes are recognised
+because the ledger hash is updated *before* writing. Renames and trash moves are recorded as
+"expected events" and ignored when Obsidian reports them back.
 
 ## Server behaviour worth knowing
 - Links are resolved the way Obsidian does: exact path first, then file name (case-insensitive, `.md` optional, shortest path wins). Backlinks therefore work even for notes created after the link.

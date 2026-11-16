@@ -1,0 +1,2 @@
+/* cove sync: minimal styles (status text inherits Obsidian's theme). */
+.cove-sync-status { font-variant-numeric: tabular-nums; }

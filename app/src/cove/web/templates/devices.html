@@ -42,6 +42,22 @@
         <div style="margin-top:var(--s3)"><button type="submit">{{ icon('plus') }}Create token</button></div>
       </form>
     </section>
+    <section class="card">
+      <h2>{{ icon('download') }} Get the plugin</h2>
+      {% if plugin_version %}
+      <p class="small" style="margin-top:0">cove sync <span class="mono xs">v{{ plugin_version }}</span> for Obsidian (desktop and mobile).</p>
+      <div class="actions" style="margin-bottom:var(--s3)">
+        <a class="btn secondary" href="/plugin/cove-sync/main.js">main.js</a>
+        <a class="btn secondary" href="/plugin/cove-sync/manifest.json">manifest.json</a>
+        <a class="btn secondary" href="/plugin/cove-sync/styles.css">styles.css</a>
+      </div>
+      <ol class="small" style="padding-left:1.2em;margin:0">
+        <li>Put the three files in <code>&lt;vault&gt;/.obsidian/plugins/cove-sync/</code></li>
+        <li>Obsidian → Settings → Community plugins → enable <b>cove sync</b></li>
+        <li>In its settings, paste this server's address and a device token, then press <b>Test</b></li>
+      </ol>
+      {% else %}<p class="small muted" style="margin:0">Plugin files aren't bundled in this build.</p>{% endif %}
+    </section>
   </aside>
 </div>
 {% endblock %}

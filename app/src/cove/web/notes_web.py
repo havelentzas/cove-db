@@ -113,18 +113,42 @@ def raw_file(file_id: str):
                                  f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{quote(name)}"})
 
 
+# ---------------------------------------------------------------- plugin download
+PLUGIN_DIR = __import__("pathlib").Path("/srv/obsidian-plugin")
+PLUGIN_FILES = {"main.js": "text/javascript", "manifest.json": "application/json", "styles.css": "text/css"}
+
+
+@settings.get("/plugin/cove-sync/{name}")
+def plugin_file(name: str):
+    """The cove sync Obsidian plugin files (built from obsidian-plugin/ in the repo)."""
+    if name not in PLUGIN_FILES or not (PLUGIN_DIR / name).exists():
+        return PlainTextResponse("not found", status_code=404)
+    return FileResponse(PLUGIN_DIR / name, media_type=PLUGIN_FILES[name],
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+def plugin_version() -> str | None:
+    try:
+        import json
+        return json.loads((PLUGIN_DIR / "manifest.json").read_text())["version"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 # ---------------------------------------------------------------- devices
 @settings.get("/settings/devices", response_class=HTMLResponse)
 def devices(request: Request):
     return _pages().TemplateResponse(request, "devices.html", {"svc": {"key": "", "name": "cove"},
-                                                               "tokens": notes.list_tokens(), "new": None})
+                                                               "tokens": notes.list_tokens(), "new": None,
+                                                               "plugin_version": plugin_version()})
 
 
 @settings.post("/settings/devices", response_class=HTMLResponse)
 def create_device(request: Request, name: str = Form(...)):
     new = notes.create_token(name, _actor(request))
     return _pages().TemplateResponse(request, "devices.html", {"svc": {"key": "", "name": "cove"},
-                                                               "tokens": notes.list_tokens(), "new": new})
+                                                               "tokens": notes.list_tokens(), "new": new,
+                                                               "plugin_version": plugin_version()})
 
 
 @settings.post("/settings/devices/{token_id}/revoke")

@@ -1,0 +1,5 @@
+obsidian-plugin/node_modules
+backups
+.env
+.git
+**/__pycache__
