@@ -6,7 +6,7 @@
                                           secrets/oidc_client_secret.txt (then restart web)
   scripts/setup-auth.py add-user NAME EMAIL [--admin]
                                           create a user in the `cove` group and print a sign-up link
-  scripts/setup-auth.py login-link NAME   a one-time link (15 minutes) to sign in and add a passkey:
+  scripts/setup-auth.py login-link NAME   a one-time link (1 hour) to sign in and add a passkey:
                                           first-time setup, or recovery after losing all passkeys
 
 Reads COVE_PUBLIC_URL and COVE_AUTH_URL from .env. Talks to Pocket ID on 127.0.0.1:1411.
@@ -94,8 +94,10 @@ def find_user(name: str) -> dict | None:
 
 def login_link(name: str) -> None:
     user = find_user(name) or sys.exit(f"no user '{name}'")
-    token = call("POST", f"/users/{user['id']}/one-time-access-token", {"ttl": 900})["token"]
-    print(f"one-time link for {name} (valid 15 minutes, works once):\n  {env()['COVE_AUTH_URL'].rstrip('/')}/lc/{token}")
+    # Pocket ID issues a 6-character code for TTLs up to 15 minutes, and its login page only accepts
+    # 12-character codes while email login is off (no SMTP), so a short TTL gives a link that never works.
+    token = call("POST", f"/users/{user['id']}/one-time-access-token", {"ttl": 3600})["token"]
+    print(f"one-time link for {name} (valid 1 hour, works once):\n  {env()['COVE_AUTH_URL'].rstrip('/')}/lc/{token}")
     print("Open it, then add a passkey (Account → Passkeys). Add a second one on another device.")
 
 
