@@ -97,6 +97,9 @@ services:
       COVE_AUTH_INTERNAL_URL: http://pocket-id:1411                    # server-to-server (token, keys)
       COVE_OIDC_CLIENT_ID: cove
     command: ["uvicorn", "cove.web.app:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    volumes:
+      - notes_blobs:/data/blobs
+      - ./ETHOS.md:/srv/ETHOS.md:ro     # edits to ETHOS.md show on /ethos without a rebuild
     ports:
       - "127.0.0.1:8080:8080"
 
