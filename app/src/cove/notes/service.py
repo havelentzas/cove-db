@@ -27,7 +27,7 @@ from typing import Any, Iterable
 import merge3
 from psycopg.types.json import Jsonb
 
-from cove import db
+from cove import context, db
 from cove.crm.service import Invalid, NotFound, _audit, _plain  # shared errors + helpers
 from cove.notes import markdown as md
 
@@ -310,8 +310,19 @@ def delete(file_id: Any, base_version: int | None, actor: str) -> dict:
 
 
 # ================================================================ blobs
+def _blob_root() -> Path:
+    """Each workspace has its own blob folder (BLOB_DIR/<workspace short id>), so one workspace can't
+    read or probe another's attachments. Tests (no workspace) use BLOB_DIR directly."""
+    p = context.current()
+    if p is None:
+        if db.test_mode():
+            return BLOB_DIR
+        raise context.NoWorkspace("no workspace selected for this request")
+    return BLOB_DIR / p.workspace.id.replace("-", "")[:12]
+
+
 def _blob_path(sha: str) -> Path:
-    return BLOB_DIR / sha[:2] / sha[2:4] / sha
+    return _blob_root() / sha[:2] / sha[2:4] / sha
 
 
 def has_blob(sha: str) -> bool:
@@ -565,7 +576,7 @@ def guess_mime(path: str) -> str:
 
 
 # ================================================================ graph & folder tree
-_cache: dict[str, tuple[tuple, Any]] = {}
+_cache: dict[tuple[str, str], tuple[tuple, Any]] = {}   # (workspace, name) -> (feed head, value)
 
 
 def _head_seq(c) -> tuple:
@@ -578,11 +589,13 @@ def _cached(name: str, build):
     """Recompute only when the vault changed (any write bumps the change-feed head)."""
     with db.conn() as c:
         head = _head_seq(c)
-    hit = _cache.get(name)
+    p = context.current()
+    key = (p.workspace.id if p else "", name)     # never share between workspaces
+    hit = _cache.get(key)
     if hit and hit[0] == head:
         return hit[1]
     value = build()
-    _cache[name] = (head, value)
+    _cache[key] = (head, value)
     return value
 
 

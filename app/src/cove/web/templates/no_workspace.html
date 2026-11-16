@@ -1,0 +1,34 @@
+{#- Signed in, but not a member of any workspace yet. -#}
+{% from "_icons.html" import icon %}
+<!doctype html>
+<html lang="en" data-service="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No workspace yet · cove</title>
+<script src="/static/theme-init.js"></script>
+<link rel="icon" href="/brand/logo/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/brand/cove.css">
+</head>
+<body>
+<main class="gate">
+  <section class="gate-hero">
+    <a class="brand" href="/account" aria-label="cove">{{ MARK|safe }}<span class="word">cove</span></a>
+    <div>
+      <p class="display">Almost <em>there.</em></p>
+      <p class="lede">You're signed in as <strong>{{ request.state.user.username }}</strong>, but you don't have a workspace in this cove yet.</p>
+    </div>
+    <p class="eyebrow" style="margin:0">cove · personal databases</p>
+  </section>
+  <section class="gate-panel">
+    <div class="gate-card">
+      {{ MARK|safe }}
+      <h1>No workspace yet</h1>
+      <p class="muted" style="margin:0">Ask whoever runs this cove to add you to a workspace. Once they have, reload this page.</p>
+      <a class="btn" href="/account">{{ icon('key') }}Your account</a>
+      <form method="post" action="/auth/logout">{{ csrf_field() }}<button class="ghost" type="submit" style="width:100%;margin-top:var(--s3)">{{ icon('logout') }}Sign out</button></form>
+    </div>
+  </section>
+</main>
+</body>
+</html>

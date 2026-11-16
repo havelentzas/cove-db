@@ -1,12 +1,17 @@
-"""Sign-in, sessions and CSRF for the web UI, plus the Account and Admin pages.
+"""Sign-in, sessions, CSRF and workspace selection for the web UI, plus the Account and Admin pages.
 
-Access is **deny by default**: `middleware` requires a valid session for every path except the few
-listed in PUBLIC_PATHS / PUBLIC_PREFIXES (assets, health check, the sign-in flow itself, and the notes
-sync API, which authenticates every request with its own bearer token). New routes are therefore
-protected without anyone remembering to add a dependency; tests/test_auth.py checks every route.
+Access is **deny by default**: `middleware` requires a valid session for every path except the few in
+PUBLIC_PATHS / PUBLIC_PREFIXES (assets, health check, the sign-in flow itself). The notes sync API
+(TOKEN_PREFIXES) needs a device token instead. New routes are therefore protected without anyone
+remembering to add a dependency; tests/test_auth.py checks every route.
 
-Every state-changing browser request must also carry the session's CSRF token (form field `csrf`, or
-header `X-CSRF-Token`). Templates add it with `{{ csrf_field() }}`.
+Every request then runs as a `cove.context.Principal` bound to exactly one workspace: the device token's
+workspace, or the session's selected workspace (else the user's first). Database access without one
+fails. Signed-in users with no workspace only reach their account pages.
+
+Every state-changing browser request must also carry the CSRF token (form field `csrf`, or header
+`X-CSRF-Token`). It is derived from the session *and* the workspace, so a form rendered in one workspace
+can't be submitted into another after switching. Templates add it with `{{ csrf_field() }}`.
 """
 
 from __future__ import annotations
@@ -15,15 +20,18 @@ import ipaddress
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from markupsafe import Markup, escape
 from starlette.concurrency import run_in_threadpool
 
-from cove.auth import oidc, sessions
-from cove.control import identity
+from cove import context
+from cove.auth import oidc, sessions, tokens
+from cove.control import identity, workspaces
 
 PUBLIC_PATHS = {"/healthz", "/login", "/auth/start", "/auth/callback"}
-PUBLIC_PREFIXES = ("/static/", "/brand/", "/api/notes/")
+PUBLIC_PREFIXES = ("/static/", "/brand/")
+TOKEN_PREFIXES = ("/api/notes/",)                       # bearer device tokens, not sessions
+NO_WORKSPACE_OK = ("/account", "/admin", "/auth/logout")  # reachable before you have a workspace
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 router = APIRouter(tags=["core"])
@@ -46,11 +54,31 @@ def _cookie(response, name: str, value: str, max_age: int) -> None:
     response.set_cookie(name, value, max_age=max_age, path="/", secure=True, httponly=True, samesite="lax")
 
 
+def _choose_workspace(session: dict) -> tuple[dict | None, list[dict]]:
+    mine = workspaces.for_user(session["id"])
+    chosen = next((w for w in mine if w["id"] == session.get("workspace_id")), mine[0] if mine else None)
+    return chosen, mine
+
+
 async def middleware(request: Request, call_next):
     request.state.user = None
     request.state.csrf = ""
+    request.state.workspace = None
+    request.state.workspaces = []
+    context.set_current(None)            # never inherit a principal from an earlier request
     path = request.url.path
     if is_public(path):
+        return await call_next(request)
+
+    if path.startswith(TOKEN_PREFIXES):
+        auth = request.headers.get("authorization", "")
+        dev = await run_in_threadpool(tokens.verify, auth.removeprefix("Bearer ").strip()) if auth else None
+        if not dev:
+            return JSONResponse({"detail": "missing or invalid device token"}, status_code=401,
+                                headers={"WWW-Authenticate": "Bearer"})
+        request.state.device = dev
+        context.set_current(context.Principal(actor=f"device:{dev['name']}", workspace=dev["workspace"],
+                                              user_id=dev["user_id"], scopes=frozenset(dev["scopes"])))
         return await call_next(request)
 
     token = request.cookies.get(sessions.COOKIE)
@@ -65,8 +93,10 @@ async def middleware(request: Request, call_next):
             resp.headers["HX-Redirect"] = "/login"
         return resp
 
+    ws, mine = await run_in_threadpool(_choose_workspace, session)
     request.state.user = session
-    request.state.csrf = sessions.csrf_token(token)
+    request.state.workspaces = mine
+    request.state.csrf = sessions.csrf_token(token, ws["id"] if ws else "")
     if request.method not in SAFE_METHODS:
         submitted = request.headers.get("x-csrf-token")
         ctype = request.headers.get("content-type", "")
@@ -75,11 +105,19 @@ async def middleware(request: Request, call_next):
             form = await request.form()
             submitted = form.get("csrf")
             await form.close()
-        if not sessions.check_csrf(token, submitted if isinstance(submitted, str) else None):
+        if not sessions.check_csrf(token, ws["id"] if ws else "", submitted if isinstance(submitted, str) else None):
             await run_in_threadpool(identity.event, "csrf_rejected", user_id=session["id"],
                                     session_id=session["session_id"], ip=client_ip(request),
                                     user_agent=request.headers.get("user-agent"), path=path)
             return PlainTextResponse("This form expired. Go back, reload the page and try again.", status_code=403)
+
+    if ws is None:
+        if not path.startswith(NO_WORKSPACE_OK):
+            return _pages().TemplateResponse(request, "no_workspace.html", {}, status_code=403)
+        return await call_next(request)
+    request.state.workspace = ws
+    context.set_current(context.Principal(actor=f"web:{session['username']}", workspace=workspaces.as_context(ws),
+                                          user_id=session["id"], role=ws["role"]))
     return await call_next(request)
 
 
@@ -153,6 +191,16 @@ def logout(request: Request, everywhere: bool = Form(False)):
     return resp
 
 
+# ================================================================ workspaces
+@router.post("/workspace")
+def switch_workspace(request: Request, workspace_id: str = Form(...)):
+    me = current_user(request)
+    if not any(w["id"] == workspace_id for w in request.state.workspaces):
+        return PlainTextResponse("You're not a member of that workspace.", status_code=403)
+    sessions.set_workspace(me["session_id"], workspace_id)
+    return RedirectResponse("/", status_code=303)
+
+
 # ================================================================ account
 @router.get("/account", response_class=HTMLResponse)
 def account(request: Request):
@@ -190,6 +238,7 @@ def admin(request: Request):
         return PlainTextResponse("Only admins can open this page.", status_code=403)
     return _pages().TemplateResponse(request, "admin.html", {
         "svc": _core(), "me": current_user(request), "users": identity.list_users(),
+        "all_workspaces": workspaces.list_all(),
         "events": identity.events(limit=100), "auth_url": oidc.settings()["issuer"]})
 
 

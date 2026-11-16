@@ -42,7 +42,9 @@ def test_every_route_requires_sign_in(database):
             continue
         url = re.sub(r"\{[^}]+\}", "00000000-0000-0000-0000-000000000001", path)
         r = c.request(method, url, headers={"origin": PUBLIC})
-        if method == "GET":
+        if path.startswith(auth.TOKEN_PREFIXES):
+            assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer", (method, path)
+        elif method == "GET":
             assert r.status_code == 303 and r.headers["location"].startswith("/login?next="), (method, path)
         else:
             assert r.status_code == 401, (method, path, r.status_code)
@@ -52,7 +54,8 @@ def test_every_route_requires_sign_in(database):
 
 def test_public_paths_are_only_the_expected_ones():
     assert auth.PUBLIC_PATHS == {"/healthz", "/login", "/auth/start", "/auth/callback"}
-    assert auth.PUBLIC_PREFIXES == ("/static/", "/brand/", "/api/notes/")   # notes API: bearer tokens
+    assert auth.PUBLIC_PREFIXES == ("/static/", "/brand/")
+    assert auth.TOKEN_PREFIXES == ("/api/notes/",)    # device tokens instead of sessions
 
 
 def test_login_redirect_keeps_target_and_htmx_gets_401(database):
@@ -229,7 +232,7 @@ def test_full_sign_in_sets_a_hardened_session_cookie(provider):
     assert c.get("/people").status_code == 200
     with db.ctl_conn() as conn:
         kinds = [e["kind"] for e in conn.execute("SELECT kind FROM control.security_events ORDER BY id").fetchall()]
-    assert kinds == ["user_created", "login"]
+    assert kinds == ["user_created", "workspaces_adopted", "login"]   # first user owns the existing workspace
 
 
 def test_sign_in_twice_reuses_the_user_but_not_the_session(provider):
@@ -285,3 +288,31 @@ def test_sign_in_fails_closed_when_not_configured(database, monkeypatch):
     secrets.get.cache_clear()
     assert anon().get("/auth/start").status_code == 503
     assert "isn't set up" in anon().get("/login").text
+
+
+# ------------------------------------------------------------------ workspaces in the web UI
+def test_user_without_a_workspace_only_reaches_account_pages(database):
+    b = Browser("loner", workspace=False)
+    with db.ctl_conn() as c:
+        c.execute("DELETE FROM control.memberships WHERE user_id = %s", (b.user["id"],))
+    assert b.get("/people").status_code == 403 and "No workspace yet" in b.get("/people").text
+    assert b.get("/account").status_code == 200
+
+
+def test_csrf_token_is_bound_to_the_workspace(browser):
+    with db.ctl_conn() as c:
+        other = c.execute("INSERT INTO control.workspaces (slug, name, db_name, role_name, status) VALUES "
+                          "('other', 'Other', 'cove_other', 'other_ws', 'active') RETURNING id").fetchone()["id"]
+        c.execute("INSERT INTO control.memberships (workspace_id, user_id, role) VALUES (%s, %s, 'owner')",
+                  (other, browser.user["id"]))
+    old_csrf = browser.csrf
+    assert browser.post("/workspace", {"workspace_id": str(other)}).status_code == 303
+    r = browser.client.post("/settings/devices", data={"name": "x", "csrf": old_csrf}, headers={"origin": PUBLIC})
+    assert r.status_code == 403        # a form from the previous workspace can't post into this one
+
+
+def test_cannot_switch_to_a_workspace_you_are_not_in(browser):
+    with db.ctl_conn() as c:
+        other = c.execute("INSERT INTO control.workspaces (slug, name, db_name, role_name, status) VALUES "
+                          "('theirs', 'Theirs', 'cove_theirs', 'their_ws', 'active') RETURNING id").fetchone()["id"]
+    assert browser.post("/workspace", {"workspace_id": str(other)}).status_code == 403

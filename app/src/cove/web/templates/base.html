@@ -33,6 +33,14 @@
     <span class="spacer"></span>
     {% set U = request.state.user %}
     {% if U %}<span class="user-menu">
+      {% set WS = request.state.workspaces %}
+      {% if WS|length > 1 %}
+      <form method="post" action="/workspace" data-autosubmit>{{ csrf_field() }}
+        <select name="workspace_id" class="select-chip" aria-label="Workspace">
+          {% for w in WS %}<option value="{{ w.id }}" {% if request.state.workspace and w.id == request.state.workspace.id %}selected{% endif %}>{{ w.name }}</option>{% endfor %}
+        </select><noscript><button class="secondary" type="submit">Switch</button></noscript>
+      </form>
+      {% endif %}
       <a href="/account" {% if path == '/account' %}aria-current="page"{% endif %} title="Your account and devices">{{ U.username }}</a>
       {% if U.is_admin %}<a href="/admin" {% if path == '/admin' %}aria-current="page"{% endif %}>admin</a>{% endif %}
     </span>{% endif %}

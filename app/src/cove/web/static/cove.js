@@ -7,6 +7,7 @@
      data-no-submit               on <form>: never submit (JS-only controls)
      data-check="all|none" data-target="css"          tick/untick checkboxes
      data-add-row="map" / data-remove-row             repeating rows in the contact form
+     data-autosubmit              on <form>: submit when one of its fields changes (workspace switcher)
 */
 (function () {
   "use strict";
@@ -30,6 +31,11 @@
     var tpl = document.getElementById("tpl-" + rep), rows = document.getElementById("rows-" + rep);
     if (tpl && rows) rows.insertAdjacentHTML("beforeend", tpl.innerHTML.split("__IDX__").join(String(rowCounter++)));
   }
+
+  document.addEventListener("change", function (e) {
+    var f = e.target.form;
+    if (f && f.hasAttribute("data-autosubmit")) f.requestSubmit();
+  });
 
   document.addEventListener("click", function (e) {
     var el;

@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
-from cove import brand
+from cove import brand, context
 from cove.web import auth, hub, notes_api, notes_web, security
 from cove.crm import service as svc
 from cove.templating import FormError, form_to_record, load_template, record_to_form
@@ -341,10 +341,10 @@ _PENDING_TTL = 3600
 
 def _stash(cards: list[dict]) -> str:
     now = time.time()
-    for k in [k for k, (t, _) in _PENDING.items() if now - t > _PENDING_TTL]:
+    for k in [k for k, (t, _, _) in _PENDING.items() if now - t > _PENDING_TTL]:
         del _PENDING[k]
     token = secrets.token_urlsafe(16)
-    _PENDING[token] = (now, cards)
+    _PENDING[token] = (now, context.require().workspace.id, cards)   # confirmable only in this workspace
     return token
 
 
@@ -362,11 +362,13 @@ async def import_preview(request: Request, file: UploadFile):
 async def import_confirm(request: Request):
     form = await request.form()
     pending = _PENDING.pop(str(form.get("token", "")), None)
+    if pending and pending[1] != context.require().workspace.id:
+        pending = None
     if not pending:
         return pages.TemplateResponse(request, "import.html", {
             "preview": None, "error": "This preview expired (or the server restarted). Please upload the file again."},
             status_code=410)
-    cards = pending[1]
+    cards = pending[2]
     chosen = [cards[int(i)] for i in form.getlist("pick") if str(i).isdigit() and int(i) < len(cards)]
     result = svc.import_cards(chosen, f"{actor(request)}:import")
     if result["failed"]:

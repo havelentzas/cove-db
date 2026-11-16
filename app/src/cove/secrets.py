@@ -28,10 +28,9 @@ def get(name: str, required: bool = True) -> str | None:
     return None
 
 
-def database_url(role: str, database: str | None = None) -> str:
+def database_url(role: str, database: str) -> str:
     """postgresql:// URL for one of cove's database roles, built from secrets."""
     host = os.environ.get("COVE_DB_HOST", "postgres")
-    database = database or os.environ.get("COVE_DB_NAME", "cove")
     password = get({"cove_app": "app_password", "cove_readonly": "readonly_password",
                     "cove_owner": "postgres_password"}[role])
     return f"postgresql://{role}:{password}@{host}:5432/{database}"

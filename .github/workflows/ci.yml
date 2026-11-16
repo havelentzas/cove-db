@@ -11,14 +11,15 @@ jobs:
       - name: Create throwaway secrets
         run: sh scripts/init-secrets.sh && cp .env.example .env
       - name: Build
-        run: docker compose build web dbinit
+        run: docker compose build migrate dbinit
       - name: Server tests
         run: docker compose --profile test run --rm test
       - name: Encrypted backup round trip (dump, restore drill, encrypt, decrypt + restore)
         run: |
           sh scripts/init-backup-key.sh "$RUNNER_TEMP/backup-key.txt"
+          docker compose run --rm migrate python -m cove.control.workspaces create main "Main"
           docker compose run --rm -e BACKUP_ONCE=1 backup
-          grep -q "^ok .*cove=\[exact" backups/STATUS
+          grep -q "^ok .*cove_ws_[0-9a-f]*=\[exact" backups/STATUS
           ! ls backups/*.dump 2>/dev/null   # no plaintext dumps on disk
           sh scripts/restore.sh db "$RUNNER_TEMP/backup-key.txt"
       - name: Obsidian plugin integration tests
@@ -51,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: sh scripts/init-secrets.sh && cp .env.example .env && docker compose build web dbinit
+        run: sh scripts/init-secrets.sh && cp .env.example .env && docker compose build migrate dbinit
       - name: Scan cove-app
         run: $TRIVY --exit-code 1 cove-app:latest
       - name: Scan cove-backup (excluding the restic binary)

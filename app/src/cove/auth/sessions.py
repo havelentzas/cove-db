@@ -4,7 +4,8 @@
   leak doesn't yield usable cookies.
 - A session ends after 7 days without use, or 30 days after sign-in, whichever comes first; a new
   session (new ID) is created at every sign-in, and sign-out ends it server-side.
-- The CSRF token is derived from the session token, so it's per-session and needs no storage.
+- The CSRF token is derived from the session token and the selected workspace, so it's per session and
+  per workspace, and needs no storage.
 """
 
 from __future__ import annotations
@@ -33,12 +34,12 @@ def _hash(token: str) -> str:
     return hmac.new(secrets.get("token_pepper").encode(), ("session:" + token).encode(), hashlib.sha256).hexdigest()
 
 
-def csrf_token(token: str) -> str:
-    return hmac.new(_key("csrf"), token.encode(), hashlib.sha256).hexdigest()
+def csrf_token(token: str, workspace_id: str = "") -> str:
+    return hmac.new(_key("csrf"), f"{token}|{workspace_id}".encode(), hashlib.sha256).hexdigest()
 
 
-def check_csrf(token: str, submitted: str | None) -> bool:
-    return bool(submitted) and hmac.compare_digest(csrf_token(token), submitted)
+def check_csrf(token: str, workspace_id: str, submitted: str | None) -> bool:
+    return bool(submitted) and hmac.compare_digest(csrf_token(token, workspace_id), submitted)
 
 
 def create(user: dict, *, ip: str | None, user_agent: str | None) -> str:
@@ -57,7 +58,7 @@ def lookup(token: str | None) -> dict | None:
         return None
     with db.ctl_conn() as c:
         row = c.execute(
-            "SELECT s.id AS session_id, s.created_at, s.last_seen_at, s.expires_at, "
+            "SELECT s.id AS session_id, s.workspace_id, s.created_at, s.last_seen_at, s.expires_at, "
             "       s.expires_at < now() OR s.last_seen_at < now() - %s AS expired, "
             "       s.last_seen_at < now() - %s AS stale, "
             "       u.id, u.username, u.email, u.display_name, u.is_admin, u.disabled_at "
@@ -91,6 +92,12 @@ def revoke_all(user_id: Any, *, except_session: Any = None, by: Any = None, ip: 
         identity.event("sessions_revoked_all", user_id=user_id, ip=ip, conn=c, count=n, by=str(by or user_id),
                        kept=str(except_session) if except_session else None)
     return n
+
+
+def set_workspace(session_id: Any, workspace_id: Any) -> None:
+    """Remember the workspace this session works in (membership is checked by the caller)."""
+    with db.ctl_conn() as c:
+        c.execute("UPDATE control.sessions SET workspace_id = %s WHERE id = %s", (str(workspace_id), str(session_id)))
 
 
 def list_for(user_id: Any) -> list[dict]:

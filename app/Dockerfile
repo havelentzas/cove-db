@@ -18,5 +18,6 @@ COPY brand /srv/brand
 COPY obsidian-plugin/main.js obsidian-plugin/manifest.json obsidian-plugin/styles.css /srv/obsidian-plugin/
 COPY templates /srv/templates
 COPY db/migrations /srv/db/migrations
+COPY db/control /srv/db/control
 RUN useradd --system --uid 10001 cove && mkdir -p /data/blobs && chown -R cove /data
 USER cove

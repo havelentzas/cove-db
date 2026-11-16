@@ -35,6 +35,20 @@
   </table></div>
 </section>
 <section class="card">
+  <h2 style="margin-bottom:var(--s3)">Workspaces</h2>
+  <p class="small muted" style="margin-top:0">Each workspace is its own database. Create one with <code>docker compose run --rm migrate python -m cove.control.workspaces create &lt;slug&gt; "&lt;name&gt;" --owner &lt;username&gt;</code>.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Workspace</th><th>Status</th><th>Schema</th><th>Members</th><th>Created</th></tr></thead>
+    <tbody>
+    {% for w in all_workspaces %}
+    <tr><td><strong>{{ w.name }}</strong><div class="xs muted mono">{{ w.slug }} · {{ w.db_name }}</div></td>
+      <td>{% if w.status == 'active' %}<span class="chip">active</span>{% else %}<span class="chip accent">{{ w.status|replace('_', ' ') }}</span>{% if w.status_detail %}<div class="xs muted">{{ w.status_detail|truncate(120) }}</div>{% endif %}{% endif %}</td>
+      <td class="small mono">{{ w.schema_version or '—' }}</td><td class="small mono">{{ w.members }}</td><td class="small">{{ w.created_at|d }}</td></tr>
+    {% else %}<tr><td colspan="5" class="small muted">No workspaces yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<section class="card">
   <h2 style="margin-bottom:var(--s3)">{{ icon('shield') }} Security events</h2>
   <div class="table-wrap"><table>
     <thead><tr><th>When</th><th>Event</th><th>Who</th><th>From</th><th>Detail</th></tr></thead>

@@ -67,29 +67,28 @@ services:
       postgres:
         condition: service_healthy
 
+  # Migrations for cove_control and every workspace database (cove.control.migrate); also the place to
+  # run workspace provisioning: docker compose run --rm migrate python -m cove.control.workspaces …
   migrate:
-    image: amacneil/dbmate:2@sha256:b0c8a87bfef4f2819fdb0a68ca357a44d12fb90d23eca695fcfc3b7e159cb1c5
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
+    <<: *hardened
+    image: cove-app:latest
+    build:                             # builds cove-app, which web, mcp and test share
+      context: .
+      dockerfile: app/Dockerfile
+    restart: "no"
     read_only: true
-    environment:
-      DBMATE_MIGRATIONS_DIR: /db/migrations
-      DBMATE_NO_DUMP_SCHEMA: "true"
-    secrets: [postgres_password]
+    tmpfs: ["/tmp:size=64m"]
+    secrets: [postgres_password, token_pepper]
     volumes:
-      - ./db:/db:ro
+      - notes_blobs:/data/blobs        # provisioning creates each workspace's blob folder
     networks: [db]
-    # data migrations (db/migrations → cove), then identity migrations (db/control → cove_control)
-    entrypoint: ["sh", "-c", 'set -e; U="postgresql://cove_owner:$$(cat /run/secrets/postgres_password)@postgres:5432"; DATABASE_URL="$$U/cove?sslmode=disable" dbmate --wait up; DATABASE_URL="$$U/cove_control?sslmode=disable" dbmate --migrations-dir /db/control up']
+    command: ["python", "-m", "cove.control.migrate"]
     depends_on:
       dbinit:
         condition: service_completed_successfully
 
   web:
     <<: *app
-    build:
-      context: .
-      dockerfile: app/Dockerfile
     environment:
       <<: *app-env
       COVE_MCP_URLS: ${COVE_MCP_URLS:-http://127.0.0.1:8765/mcp}
@@ -107,13 +106,12 @@ services:
     environment:
       <<: *app-env
       COVE_MCP_EXTRA_HOSTS: ${COVE_MCP_EXTRA_HOSTS:-}
+      COVE_MCP_WORKSPACE: ${COVE_MCP_WORKSPACE:-}     # slug; MCP works in this one workspace until Phase 4
     ports:
       - "127.0.0.1:8765:8765"
     depends_on:
       migrate:
         condition: service_completed_successfully
-      web:
-        condition: service_started   # ensures the shared image is built first
 
   # Pocket ID: passkey sign-in (OIDC provider). All state, including uploads, lives in its own
   # Postgres database (pocketid), so there is no volume and it is covered by the nightly backup.
@@ -167,7 +165,7 @@ services:
       PGDATABASE: cove
       BACKUP_RETENTION_DAYS: "14"
       BACKUP_AGE_RECIPIENTS: ${COVE_BACKUP_AGE_RECIPIENTS:-}
-      BACKUP_DATABASES: cove cove_control pocketid
+      BACKUP_DATABASES: cove_control pocketid    # plus every workspace database, found in cove_control
     secrets: [postgres_password]
     volumes:
       - ./backups:/backups

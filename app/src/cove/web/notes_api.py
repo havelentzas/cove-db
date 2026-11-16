@@ -19,9 +19,9 @@ API_VERSION = 1
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 
-def device(authorization: Annotated[str | None, Header()] = None) -> dict:
-    token = (authorization or "").removeprefix("Bearer ").strip()
-    dev = notes.verify_token(token)
+def device(request: Request) -> dict:
+    """The device token was verified by cove.web.auth (which also selected its workspace)."""
+    dev = getattr(request.state, "device", None)
     if not dev:
         raise HTTPException(401, "missing or invalid device token", headers={"WWW-Authenticate": "Bearer"})
     return {**dev, "actor": f"device:{dev['name']}"}
@@ -61,7 +61,7 @@ def _errors(fn):
 @router.get("/whoami")
 def whoami(dev: Device) -> dict:
     """Check the token and get server info (call this first)."""
-    return {"server": "cove", "api_version": API_VERSION, "device": dev["name"],
+    return {"server": "cove", "api_version": API_VERSION, "device": dev["name"], "workspace": dev["slug"],
             "head_seq": notes.changes(10 ** 18)["head_seq"]}
 
 

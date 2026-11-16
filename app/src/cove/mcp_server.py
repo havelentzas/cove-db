@@ -16,6 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
+from cove import context
 from cove.crm import service as svc
 from cove.notes import service as notes
 
@@ -58,6 +59,8 @@ async def _call(fn, *args, **kwargs) -> Any:
         return await anyio.to_thread.run_sync(functools.partial(fn, *args, **kwargs))
     except svc.Conflict as e:
         raise ToolError(f"Version conflict: {e}. Current version is {e.current_version}.") from None
+    except context.NoWorkspace:
+        raise ToolError("This MCP server isn't connected to a workspace yet (COVE_MCP_WORKSPACE).") from None
     except (svc.NotFound, svc.Invalid, notes.PathTaken) as e:
         raise ToolError(str(e)) from None
 
@@ -276,8 +279,20 @@ async def note_backlinks(note: str) -> list[dict]:
     return await _call(notes.backlinks, f["id"])
 
 
+def bind_workspace(slug: str) -> None:
+    """Until MCP has per-token principals (Phase 4), the whole server works in one workspace."""
+    from cove.control import workspaces
+    ws = workspaces.as_context(workspaces.by_slug(slug))
+    context.set_process_default(context.Principal(actor="mcp", workspace=ws))
+
+
 def main() -> None:
     port = int(os.environ.get("COVE_MCP_PORT", "8765"))
+    if slug := os.environ.get("COVE_MCP_WORKSPACE", "").strip():
+        bind_workspace(slug)
+        print(f"cove MCP: workspace '{slug}'", flush=True)
+    else:
+        print("cove MCP: no COVE_MCP_WORKSPACE set; tools will refuse to run", flush=True)
     # Reachable via the 127.0.0.1 port mapping and (optionally) `tailscale serve`. Any other
     # Host/Origin header is rejected so a web page in a browser can't talk to it (DNS rebinding).
     # COVE_MCP_EXTRA_HOSTS: comma-separated extra hostnames, e.g. the machine's tailnet name.

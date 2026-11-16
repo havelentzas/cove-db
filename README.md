@@ -9,7 +9,8 @@ IETF's JSON successor to vCard. vCard import and export follow [RFC 9555](https:
 so Google Contacts, iOS and other address books still work with it.
 
 ```
-postgres (pgvector/pg17) ── dbinit (roles, databases) ── migrate (dbmate)
+postgres (pgvector/pg17) ── dbinit (roles, shared databases) ── migrate (control + every workspace)
+   │  cove_control (users, sessions, workspaces, tokens) · pocketid · cove_ws_<id> per workspace
    ├── pocket-id :1411  passkey sign-in (OIDC)
    ├── web  :8080  FastAPI + HTMX ──┐   signed-in sessions, CSRF
    ├── mcp  :8765  MCP (HTTP)  ─────┤── both use cove.crm.service (validation, versioning, audit log)
@@ -23,6 +24,7 @@ cp .env.example .env          # then set COVE_PUBLIC_URL / COVE_AUTH_URL
 scripts/init-secrets.sh       # random secrets in ./secrets
 scripts/init-backup-key.sh    # backup encryption key (move the private half off the machine)
 docker compose up -d --build
+docker compose run --rm migrate python -m cove.control.workspaces create main "My cove"
 scripts/setup-auth.py         # sign-in: OIDC client + group (docs/auth.md)
 scripts/setup-auth.py add-user <username> <email> --admin
 docker compose --profile test run --rm test

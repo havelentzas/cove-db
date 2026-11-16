@@ -1,7 +1,7 @@
 #!/bin/sh
 # Nightly encrypted backup of cove's databases, note attachments and secrets, with a restore drill.
 #
-#   For each database in BACKUP_DATABASES (cove, cove_control, pocketid):
+#   For each database in BACKUP_DATABASES (cove_control, pocketid) and every workspace database:
 #   1. pg_dump into tmpfs (memory) — plaintext never touches disk
 #   2. restore drill: restore that dump into a scratch database and compare row counts with the live one
 #   3. encrypt to the age recipients in COVE_BACKUP_AGE_RECIPIENTS → /backups/<db>-<ts>.dump.age
@@ -71,7 +71,8 @@ backup_db() { # $1 = database
 cycle() {
   ts=$(date +%Y%m%d-%H%M%S)
   DRILLS=""
-  for d in ${BACKUP_DATABASES:-cove}; do backup_db "$d" || return 1; done
+  workspaces=$(psql -d cove_control -XAtq -c "SELECT db_name FROM control.workspaces WHERE status <> 'archived' ORDER BY created_at" 2>/dev/null) || workspaces=""
+  for d in ${BACKUP_DATABASES:-cove_control} $workspaces; do backup_db "$d" || return 1; done
 
   new=0
   if [ -d /blobs ]; then

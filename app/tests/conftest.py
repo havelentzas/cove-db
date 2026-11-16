@@ -9,6 +9,15 @@ MIGRATIONS = Path(os.environ.get("COVE_MIGRATIONS_DIR", Path(__file__).resolve()
 CONTROL_MIGRATIONS = MIGRATIONS.parent / "control"
 
 
+def _test_ws():
+    from cove.context import Workspace
+    return Workspace(id="7e570000-0000-4000-8000-000000000001", slug="test", name="Test", db_name="cove_test",
+                     role_name="test_ws")
+
+
+TEST_WS = _test_ws()
+
+
 def _up_sql(path: Path) -> str:
     text = path.read_text()
     return re.split(r"^-- migrate:down", text.split("-- migrate:up", 1)[1], flags=re.M)[0]
@@ -27,9 +36,16 @@ def database():
         c.execute("DROP SCHEMA IF EXISTS control CASCADE")
         for f in [*sorted(MIGRATIONS.glob("*.sql")), *sorted(CONTROL_MIGRATIONS.glob("*.sql"))]:
             c.execute(_up_sql(f))
-    from cove import db
+    from cove import context, db
     db.configure(url)
+    # one test workspace (test mode sends every connection to cove_test anyway), active for direct
+    # service calls; HTTP requests get their principal from the auth middleware
+    with psycopg.connect(url, autocommit=True) as c:
+        c.execute("INSERT INTO control.workspaces (id, slug, name, db_name, role_name, status) VALUES "
+                  "(%s, 'test', 'Test', 'cove_test', 'test_ws', 'active')", (TEST_WS.id,))
+    token = context.set_current(context.Principal(actor="web:test", workspace=TEST_WS))
     yield url
+    context._current.reset(token)
     db.close()
 
 
@@ -43,18 +59,22 @@ def blobs(tmp_path, monkeypatch):
 class Browser:
     """A signed-in browser: TestClient with a session cookie, plus the session's CSRF token."""
 
-    def __init__(self, username="harry", admin=None):
+    def __init__(self, username="harry", admin=None, workspace=True):
         from fastapi.testclient import TestClient
         from cove.auth import sessions
         from cove.control import identity
         from cove.web.app import app
         self.user = identity.sign_in("https://id.test", "sub-" + username,
                                      {"preferred_username": username, "name": username.title()}, ip=None, user_agent="pytest")
+        if workspace:
+            with __import__("cove").db.ctl_conn() as c:
+                c.execute("INSERT INTO control.memberships (workspace_id, user_id, role) VALUES (%s, %s, 'owner') "
+                          "ON CONFLICT DO NOTHING", (TEST_WS.id, self.user["id"]))
         if admin is not None:
             with __import__("cove").db.ctl_conn() as c:
                 c.execute("UPDATE control.users SET is_admin=%s WHERE id=%s", (admin, self.user["id"]))
         self.token = sessions.create(self.user, ip="127.0.0.1", user_agent="pytest")
-        self.csrf = sessions.csrf_token(self.token)
+        self.csrf = sessions.csrf_token(self.token, TEST_WS.id if workspace else "")
         self.client = TestClient(app, base_url="https://cove.test", follow_redirects=False)
         self.client.cookies.set(sessions.COOKIE, self.token)
 

@@ -5,6 +5,16 @@ one MCP server and to the user through a web UI. Each life area is a **domain** 
 Live domains: **People** (personal CRM, `crm` schema) and **Notes** (the user's Obsidian vault, synced
 two ways, `notes` schema; protocol in `docs/notes-sync.md`).
 
+## Workspaces (one database each)
+Each workspace is its own database `cove_ws_<id>` with roles `ws_<id>` / `ws_<id>_ro`. Every request runs as a
+`cove.context.Principal` bound to one workspace (set by `web/auth.py` from the session or device token; MCP uses
+`COVE_MCP_WORKSPACE` until Phase 4). `db.conn()` / `db.ro_conn()` connect to the current workspace and
+`SET ROLE` into its role; with no principal they raise `NoWorkspace`. So service code never names a database:
+it just calls `db.conn()`. Anything cached in-process must be keyed by workspace (see `notes._cached`).
+Migrations in `db/migrations` grant to `cove_app`/`cove_readonly` as before; the migrator moves those grants onto
+each workspace's roles. Provision with `docker compose run --rm migrate python -m cove.control.workspaces
+create <slug> "<name>" --owner <username>` (also `list`, `add-member`, `adopt`). Control tables: `db/control`.
+
 ## Live context lives in the database, not here
 At the start of any session that touches data, call the MCP tools **`describe_system`** (domains, tables,
 counts, recent schema changes) and **`read_notes`** (durable notes from earlier sessions about the user's
@@ -17,8 +27,8 @@ public: never commit hostnames, emails, tokens or personal data. See `SECURITY.m
 ## Services (`docker compose`, project name `cove`)
 | service  | what | where |
 |---|---|---|
-| postgres | `pgvector/pgvector:pg17`, volume `cove_pgdata` | 127.0.0.1:5432, db `cove` (+ `cove_test`) |
-| migrate  | dbmate: `db/migrations` → `cove`, then `db/control` → `cove_control`, then exits | — |
+| postgres | `pgvector/pgvector:pg17`, volume `cove_pgdata`. Databases: `cove_control`, `pocketid`, one `cove_ws_<id>` per workspace, `cove_test` | internal network only |
+| migrate  | `python -m cove.control.migrate`: `db/control` → `cove_control`, then `db/migrations` → every workspace database (one failing is marked `needs_attention`, the rest go on), then exits. Also where privileged workspace commands run | — |
 | dbinit   | `db/roles.sh`: login roles (passwords from secrets) and databases, idempotent; runs before every migrate | — |
 | pocket-id | Pocket ID (passkey OIDC provider), state in its own `pocketid` database | 127.0.0.1:1411, tailnet :9443 |
 | web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` (hostname: see `CLAUDE.local.md`) |
@@ -77,10 +87,12 @@ The home page (`web/hub.py`) builds its catalog from these, so nothing is hand-m
 - Naive datetimes are interpreted in `COVE_TIMEZONE` (Europe/Amsterdam); storage is timestamptz.
 
 ## Roles
-`cove_owner` (migrations, superuser) · `cove_app` (web+mcp; RW `crm.*`, `meta.agent_notes`; INSERT-only
-`meta.audit_log`; in `cove_control`: RW users/identities/sessions, INSERT-only security_events) ·
-`cove_readonly` (`sql_query` tool; read-only session, 5s timeout) · `pocketid` (owns only the `pocketid` database).
-CONNECT is granted per database (`db/roles.sh`).
+`cove_owner` (migrations and provisioning, superuser) · `cove_app` (web+mcp login role: no table privileges
+in workspace databases, only `SET ROLE ws_<id>`; in `cove_control`: RW users/identities/sessions/memberships/
+api_tokens, INSERT-only security_events) · `cove_readonly` (`sql_query` login role: only `SET ROLE ws_<id>_ro`;
+read-only, 5s timeout) · `ws_<id>` (per workspace: RW crm/notes, agent notes; INSERT-only audit log) ·
+`ws_<id>_ro` (per workspace: SELECT, no token hashes) · `pocketid` (owns only the `pocketid` database).
+CONNECT is granted per database (`db/roles.sh`, `cove.control.workspaces`).
 Secrets (DB passwords, token pepper, session key) are Docker secrets in `./secrets/*.txt` (git-ignored; dir 700),
 read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` holds only non-secret settings.
 
@@ -89,7 +101,8 @@ read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` h
 - Tests: `docker compose --profile test run --rm test` (uses `cove_test`, resets schemas per test)
 - Identity schema change: `db/control/NNN_name.sql` (database `cove_control`, schema `control`).
 - Schema change: add `db/migrations/NNN_name.sql`, insert a row into `meta.changelog` in the same
-  migration, grant to roles, then `docker compose run --rm migrate`.
+  migration, grant to `cove_app`/`cove_readonly` as usual, then `docker compose run --rm migrate` (applies it to
+  every workspace and moves the grants onto the workspace roles).
 - **Adding a new domain**: new schema migration (+ grants + `meta.domains` row), a `<domain>/service.py`
   following the CRM pattern (actor + audit + validation), MCP tools in `mcp_server.py`, web routes, and —
   if records are document-shaped — a JSON Schema in `schemas/` and a form template in `templates/`.

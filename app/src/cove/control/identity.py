@@ -53,6 +53,13 @@ def sign_in(issuer: str, subject: str, claims: dict, *, ip: str | None, user_age
                       (issuer, subject, row["id"]))
             event("user_created", user_id=row["id"], ip=ip, user_agent=user_agent, conn=c,
                   username=username, admin=first)
+            if first:   # bootstrap: the first admin owns the workspaces that were set up before anyone signed in
+                adopted = c.execute("INSERT INTO control.memberships (workspace_id, user_id, role) "
+                                    "SELECT w.id, %s, 'owner' FROM control.workspaces w WHERE NOT EXISTS "
+                                    "(SELECT 1 FROM control.memberships m WHERE m.workspace_id = w.id)",
+                                    (row["id"],)).rowcount
+                if adopted:
+                    event("workspaces_adopted", user_id=row["id"], conn=c, count=adopted)
         if row["disabled_at"]:
             event("login_refused", user_id=row["id"], ip=ip, user_agent=user_agent, conn=c, reason="disabled")
             raise Disabled(username)

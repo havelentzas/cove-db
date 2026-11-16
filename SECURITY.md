@@ -33,12 +33,14 @@ Please **don't open a public issue.** Use GitHub's private vulnerability reporti
   every night, and copied off-site with restic. See `docs/backups.md`.
 - **Supply chain:** locked dependencies, images pinned by digest, and CI that runs pip-audit, npm audit,
   gitleaks and Trivy (fixable HIGH/CRITICAL issues fail the build).
-- **Database:** separate roles for owner (migrations), app (read/write) and read-only (ad-hoc SQL with a
-  5-second timeout).
+- **Workspaces:** every workspace is its own Postgres database with its own pair of roles. The app's login
+  roles hold no table privileges and can only switch into a workspace role, so one workspace can't read
+  another's data even through a bug, and ad-hoc SQL can't climb from read-only to read/write. API tokens
+  and attachments are bound to one workspace. Identity, sessions and security events live in a separate
+  control database.
 
 ## In progress
 A security overhaul is underway:
-- a separate database per workspace
 - scoped tokens and OAuth 2.1 for MCP
 
 Until that's complete, cove must **not** be exposed to the public internet.
