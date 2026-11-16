@@ -5,6 +5,8 @@ one MCP server and to the user through a web UI. Each life area is a **domain** 
 Live domains: **People** (personal CRM, `crm` schema) and **Notes** (the user's Obsidian vault, synced
 two ways, `notes` schema; protocol in `docs/notes-sync.md`).
 
+**Read `ETHOS.md` before adding or changing a service.** It is the guiding document (also at `/ethos`).
+
 ## Workspaces (one database each)
 Each workspace is its own database `cove_ws_<id>` with roles `ws_<id>` / `ws_<id>_ro`. Every request runs as a
 `cove.context.Principal` bound to one workspace (set by `web/auth.py` from the session or device token; MCP uses
@@ -109,7 +111,7 @@ read via `cove/secrets.py`; create them with `scripts/init-secrets.sh`. `.env` h
 - Schema change: add `db/migrations/NNN_name.sql`, insert a row into `meta.changelog` in the same
   migration, grant to `cove_app`/`cove_readonly` as usual, then `docker compose run --rm migrate` (applies it to
   every workspace and moves the grants onto the workspace roles).
-- **Adding a new domain**: new schema migration (+ grants + `meta.domains` row), a `<domain>/service.py`
+- **Adding a new domain** (work through `ETHOS.md` › Checklist for a new service): new schema migration (+ grants + `meta.domains` row), a `<domain>/service.py`
   following the CRM pattern (actor + audit + validation), MCP tools in `mcp_server.py`, web routes, and —
   if records are document-shaped — a JSON Schema in `schemas/` and a form template in `templates/`.
   Give it a service key + colour pair in `brand/services.json` and follow `brand/BRAND.md` › Building a new service.
