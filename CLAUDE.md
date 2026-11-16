@@ -11,13 +11,16 @@ counts, recent schema changes) and **`read_notes`** (durable notes from earlier 
 preferences). Save new durable learnings with `write_note`. This file covers *how the system is built*;
 `meta.*` covers *what's in it*.
 
+Environment-specific details (hostnames, device names) live in the git-ignored `CLAUDE.local.md`. This repo is
+public: never commit hostnames, emails, tokens or personal data. See `SECURITY.md`.
+
 ## Services (`docker compose`, project name `cove`)
 | service  | what | where |
 |---|---|---|
 | postgres | `pgvector/pgvector:pg17`, volume `cove_pgdata` | 127.0.0.1:5432, db `cove` (+ `cove_test`) |
 | migrate  | dbmate, runs `db/migrations/*.sql` then exits | — |
-| web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` at https://cachyos-x8664.tail4fdffd.ts.net |
-| mcp      | MCP SDK 2.x `MCPServer`, streamable HTTP (`cove.mcp_server`) | http://127.0.0.1:8765/mcp, and on the tailnet at https://cachyos-x8664.tail4fdffd.ts.net:8443/mcp (host allow-list: `COVE_MCP_EXTRA_HOSTS`) |
+| web      | FastAPI + Jinja2 + HTMX (`cove.web.app`): home page `/` (all services + endpoints), People at `/people`, catalog JSON at `/api/services` | 127.0.0.1:8080, and on the tailnet via `tailscale serve` (hostname: see `CLAUDE.local.md`) |
+| mcp      | MCP SDK 2.x `MCPServer`, streamable HTTP (`cove.mcp_server`) | http://127.0.0.1:8765/mcp, and on the tailnet at `https://<host>:8443/mcp` (host allow-list: `COVE_MCP_EXTRA_HOSTS`) |
 | backup   | nightly `pg_dump -Fc` → `./backups`, 14-day retention | — |
 
 `web` and `mcp` are the same image (`app/Dockerfile`, build context = repo root).
