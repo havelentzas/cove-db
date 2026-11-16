@@ -1,0 +1,204 @@
+{
+  "id": "contact-default",
+  "title": "Contact",
+  "record": "JSContact Card (RFC 9553)",
+  "schema": "jscontact-card.schema.json",
+  "_paths": "Slash-separated paths into the record (like JSON Pointer). 'list[k=v]' selects the array item whose k equals v; 'map{k=v}' selects the map entry whose k equals v; 'map{*}' selects the first entry. Selected items are created on write. Repeating sections bind to an id-keyed map and each field path is relative to one entry. Field types: text, textarea, email, tel, url, date (stored as a JSContact PartialDate), select (single value), set (stored as a {value: true} map).",
+  "sections": [
+    {
+      "title": "Name",
+      "fields": [
+        {
+          "key": "full_name",
+          "label": "Display name",
+          "path": "name/full",
+          "type": "text",
+          "help": "Leave blank to build from the parts below"
+        },
+        {
+          "key": "given",
+          "label": "First name",
+          "path": "name/components[kind=given]/value",
+          "type": "text"
+        },
+        {
+          "key": "surname",
+          "label": "Last name",
+          "path": "name/components[kind=surname]/value",
+          "type": "text"
+        },
+        {
+          "key": "birthday",
+          "label": "Birthday",
+          "path": "anniversaries{kind=birth}/date",
+          "type": "date",
+          "help": "YYYY-MM-DD, or --MM-DD if you don't know the year"
+        }
+      ]
+    },
+    {
+      "title": "Email",
+      "repeat": "emails",
+      "fields": [
+        {
+          "key": "address",
+          "label": "Address",
+          "path": "address",
+          "type": "email",
+          "required": true
+        },
+        {
+          "key": "context",
+          "label": "Type",
+          "path": "contexts",
+          "type": "set",
+          "options": [
+            "private",
+            "work"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Phone",
+      "repeat": "phones",
+      "fields": [
+        {
+          "key": "number",
+          "label": "Number",
+          "path": "number",
+          "type": "tel",
+          "required": true
+        },
+        {
+          "key": "feature",
+          "label": "Kind",
+          "path": "features",
+          "type": "set",
+          "options": [
+            "mobile",
+            "voice",
+            "text",
+            "video"
+          ]
+        },
+        {
+          "key": "context",
+          "label": "Type",
+          "path": "contexts",
+          "type": "set",
+          "options": [
+            "private",
+            "work"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Work",
+      "fields": [
+        {
+          "key": "org",
+          "label": "Organization",
+          "path": "organizations{*}/name",
+          "type": "text"
+        },
+        {
+          "key": "title",
+          "label": "Job title",
+          "path": "titles{*}/name",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "title": "Address",
+      "repeat": "addresses",
+      "fields": [
+        {
+          "key": "street",
+          "label": "Street",
+          "path": "components[kind=name]/value",
+          "type": "text"
+        },
+        {
+          "key": "locality",
+          "label": "City",
+          "path": "components[kind=locality]/value",
+          "type": "text"
+        },
+        {
+          "key": "region",
+          "label": "Region",
+          "path": "components[kind=region]/value",
+          "type": "text"
+        },
+        {
+          "key": "postcode",
+          "label": "Postcode",
+          "path": "components[kind=postcode]/value",
+          "type": "text"
+        },
+        {
+          "key": "country",
+          "label": "Country",
+          "path": "components[kind=country]/value",
+          "type": "text"
+        },
+        {
+          "key": "context",
+          "label": "Type",
+          "path": "contexts",
+          "type": "set",
+          "options": [
+            "private",
+            "work"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Links & profiles",
+      "repeat": "links",
+      "fields": [
+        {
+          "key": "uri",
+          "label": "URL",
+          "path": "uri",
+          "type": "url",
+          "required": true
+        },
+        {
+          "key": "label",
+          "label": "Label",
+          "path": "label",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "title": "About",
+      "fields": [
+        {
+          "key": "how_met",
+          "label": "How we met",
+          "path": "cove.local:howWeMet",
+          "type": "textarea"
+        }
+      ]
+    },
+    {
+      "title": "Notes",
+      "repeat": "notes",
+      "fields": [
+        {
+          "key": "note",
+          "label": "Note",
+          "path": "note",
+          "type": "textarea",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

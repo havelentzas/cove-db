@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Tags & groups{% endblock %}
+{% block body %}
+<h1>Tags &amp; groups</h1>
+<p class="muted">Tags are free labels; groups are for sets of people (family, a club, a team). Create them by tagging a contact.</p>
+<section class="panel table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Kind</th><th>Contacts</th><th></th></tr></thead>
+    <tbody>
+    {% for t in tags %}
+      <tr>
+        <td><form id="t{{ t.id }}" method="post" action="/tags/{{ t.id }}"><input name="name" value="{{ t.name }}"></form></td>
+        <td><select name="kind" form="t{{ t.id }}"><option {% if t.kind == 'tag' %}selected{% endif %}>tag</option><option {% if t.kind == 'group' %}selected{% endif %}>group</option></select></td>
+        <td><a href="/?tag={{ t.name|urlencode }}">{{ t.contacts }}</a></td>
+        <td class="row" style="flex-wrap:nowrap"><button form="t{{ t.id }}" class="shrink secondary">Save</button>
+          <form class="shrink" method="post" action="/tags/{{ t.id }}/delete" onsubmit="return confirm('Delete tag {{ t.name }}? Contacts keep everything else.')"><button class="link">delete</button></form>
+          <a class="shrink small" href="/export.vcf?tag={{ t.name|urlencode }}">export</a></td>
+      </tr>
+    {% else %}<tr><td colspan="4" class="muted">No tags yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

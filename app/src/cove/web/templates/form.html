@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}{{ contact.display_name if contact else 'New contact' }}{% endblock %}
+{% macro input(f, name, value) -%}
+  {%- set ty = f.type or 'text' -%}
+  {%- if ty == 'textarea' -%}<textarea name="{{ name }}">{{ value }}</textarea>
+  {%- elif ty == 'set' -%}
+    <div class="row" style="gap:12px">{% for o in f.options %}<label class="shrink" style="margin:0"><input type="checkbox" style="width:auto" name="{{ name }}" value="{{ o }}" {% if o in (value or []) %}checked{% endif %}> {{ o }}</label>{% endfor %}</div>
+  {%- elif ty == 'select' -%}
+    <select name="{{ name }}"><option value=""></option>{% for o in f.options %}<option {% if o == value %}selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+  {%- else -%}<input name="{{ name }}" value="{{ value }}" type="{{ {'email':'email','tel':'tel','url':'url'}.get(ty, 'text') }}" {% if ty == 'date' %}placeholder="YYYY-MM-DD or --MM-DD"{% endif %}>
+  {%- endif -%}
+{%- endmacro %}
+{% macro repeat_row(section, rep, i, row) %}
+  <div class="panel rrow" style="padding:10px;margin-bottom:8px">
+    <input type="hidden" name="r__{{ rep }}__{{ i }}___id" value="{{ row._id or '' }}">
+    <div class="row">
+      {% for f in section.fields %}
+      <div {% if f.type == 'textarea' %}style="flex-basis:100%"{% endif %}><label>{{ f.label }}</label>{{ input(f, 'r__' ~ rep ~ '__' ~ i ~ '__' ~ f.key, row[f.key] if row else ('' if f.type != 'set' else [])) }}</div>
+      {% endfor %}
+      <div class="shrink"><button type="button" class="link" onclick="removeRow(this)">remove</button></div>
+    </div>
+  </div>
+{% endmacro %}
+{% block body %}
+<h1>{{ 'Edit ' ~ contact.display_name if contact else 'New contact' }}</h1>
+<p class="muted small">Fields are defined by <code>templates/{{ t.id }}.json</code> and stored as a {{ t.record }}.</p>
+{% if errors %}<div class="errors">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+<form method="post">
+  {% if contact %}<input type="hidden" name="version" value="{{ contact.version }}">{% endif %}
+  {% for section in t.sections %}
+  <section class="panel">
+    <h2>{{ section.title }}</h2>
+    {% if section.repeat %}
+      {% set rep = section.repeat %}
+      <div id="rows-{{ rep }}">
+        {% for row in values.repeats.get(rep, []) %}{{ repeat_row(section, rep, loop.index0, row) }}{% endfor %}
+        {% if not values.repeats.get(rep) %}{{ repeat_row(section, rep, 0, None) }}{% endif %}
+      </div>
+      <template id="tpl-{{ rep }}">{{ repeat_row(section, rep, '__IDX__', None) }}</template>
+      <button type="button" class="secondary" onclick="addRow('{{ rep }}')">+ Add {{ section.title|lower }}</button>
+    {% else %}
+      <div class="row">
+      {% for f in section.fields %}
+        <div {% if f.type == 'textarea' %}style="flex-basis:100%"{% endif %}><label>{{ f.label }}</label>{{ input(f, 'f__' ~ f.key, values.fields.get(f.key, '')) }}
+          {% if f.help %}<div class="small muted">{{ f.help }}</div>{% endif %}</div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% if not contact %}
+  <section class="panel"><h2>Tags</h2><input name="tags" value="{{ tags_text }}" placeholder="comma separated, e.g. friends, climbing"></section>
+  {% endif %}
+  <div class="row"><div class="shrink"><button type="submit">Save</button></div>
+    <div class="shrink"><a class="btn secondary" href="{{ '/contacts/' ~ contact.id if contact else '/' }}">Cancel</a></div></div>
+</form>
+<script>
+let next = 1000;
+function addRow(rep){
+  const tpl = document.getElementById('tpl-' + rep).innerHTML.replaceAll('__IDX__', String(next++));
+  document.getElementById('rows-' + rep).insertAdjacentHTML('beforeend', tpl);
+}
+function removeRow(btn){ btn.closest('.rrow').remove(); }
+</script>
+{% endblock %}

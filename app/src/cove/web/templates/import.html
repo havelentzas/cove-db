@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Import{% endblock %}
+{% block body %}
+<h1>Import contacts</h1>
+{% if error %}<div class="errors">{{ error }}</div>{% endif %}
+{% if not preview %}
+<section class="panel">
+  <p>Upload a <code>.vcf</code> file (vCard 3.0 or 4.0). From Google Contacts: <em>Export → vCard (for iOS Contacts)</em>.
+    Nothing is saved until you confirm on the next screen.</p>
+  <form method="post" enctype="multipart/form-data" class="row">
+    <input type="file" name="file" accept=".vcf,text/vcard" required>
+    <div class="shrink"><button type="submit">Preview</button></div>
+  </form>
+</section>
+{% else %}
+<form method="post" action="/import/confirm">
+  <input type="hidden" name="payload" value="{{ payload }}">
+  <section class="panel table-wrap">
+    <p>{{ preview|length }} contact(s) found. Possible duplicates are unticked.
+      <button type="button" class="link" onclick="document.querySelectorAll('input[name=pick]').forEach(x=>x.checked=true)">tick all</button></p>
+    <table>
+      <thead><tr><th></th><th>Name</th><th>Email</th><th>Possible duplicate of</th></tr></thead>
+      <tbody>
+      {% for p in preview %}
+      <tr>
+        <td><input type="checkbox" name="pick" value="{{ p.index }}" style="width:auto" {% if not p.duplicates %}checked{% endif %}></td>
+        <td>{{ p.display_name }}</td>
+        <td class="small">{{ p.emails|join(', ') }}</td>
+        <td class="small">{% for d in p.duplicates %}<a href="/contacts/{{ d.id }}" target="_blank">{{ d.display_name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <button type="submit">Import selected</button> <a class="btn secondary" href="/import">Cancel</a>
+</form>
+{% endif %}
+{% endblock %}

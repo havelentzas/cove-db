@@ -1,0 +1,11 @@
+{% for r in rows %}
+<tr>
+  <td><a href="/contacts/{{ r.id }}"><strong>{{ r.display_name }}</strong></a>{% if r.archived_at %} <span class="chip">archived</span>{% endif %}
+    <div class="small muted">{{ r.organization or '' }}{% if r.organization and r.emails %} · {% endif %}{{ r.emails[0] if r.emails else '' }}</div></td>
+  <td>{% for t in r.tags %}<a class="chip" href="/?tag={{ t|urlencode }}">{{ t }}</a>{% endfor %}</td>
+  <td class="small">{{ r.last_contacted|d or '—' }}</td>
+  <td class="small {% if r.next_due and r.next_due <= now_iso() %}due{% endif %}">{{ r.next_due|d or '—' }}</td>
+</tr>
+{% else %}
+<tr><td colspan="4" class="muted">No contacts{% if q or tag or due %} match{% endif %}. <a href="/contacts/new">Add one</a> or <a href="/import">import a .vcf</a>.</td></tr>
+{% endfor %}

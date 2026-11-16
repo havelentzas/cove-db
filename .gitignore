@@ -1,0 +1,13 @@
+# secrets & personal data — never commit
+.env
+secrets/
+backups/
+*.vcf
+*.dump
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
