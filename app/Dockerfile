@@ -1,14 +1,14 @@
 # Build context is the repo root (see docker-compose.yml).
-FROM python:3.13-slim
-COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+COPY --from=ghcr.io/astral-sh/uv:0.9@sha256:538e0b39736e7feae937a65983e49d2ab75e1559d35041f9878b7b7e51de91e4 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH" PYTHONUNBUFFERED=1 \
     COVE_SCHEMA_DIR=/srv/schemas COVE_BRAND_DIR=/srv/brand COVE_BLOB_DIR=/data/blobs COVE_TEMPLATE_DIR=/srv/templates COVE_MIGRATIONS_DIR=/srv/db/migrations
 WORKDIR /srv/app
-COPY app/pyproject.toml ./
-RUN uv sync --no-install-project
+COPY app/pyproject.toml app/uv.lock ./
+RUN uv sync --frozen --no-install-project   # exactly what uv.lock says, or fail
 COPY app/src ./src
-RUN uv sync
+RUN uv sync --frozen
 COPY schemas /srv/schemas
 COPY brand /srv/brand
 COPY obsidian-plugin/main.js obsidian-plugin/manifest.json obsidian-plugin/styles.css /srv/obsidian-plugin/

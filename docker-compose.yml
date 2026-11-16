@@ -7,7 +7,7 @@ x-app-env: &app-env
 
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
     restart: unless-stopped
     environment:
       POSTGRES_USER: cove_owner
@@ -25,7 +25,7 @@ services:
       retries: 20
 
   migrate:
-    image: amacneil/dbmate:2
+    image: amacneil/dbmate:2@sha256:b0c8a87bfef4f2819fdb0a68ca357a44d12fb90d23eca695fcfc3b7e159cb1c5
     environment:
       DATABASE_URL: postgresql://cove_owner:${POSTGRES_PASSWORD}@postgres:5432/cove?sslmode=disable
       DBMATE_MIGRATIONS_DIR: /db/migrations
@@ -73,7 +73,7 @@ services:
         condition: service_started   # ensures the shared image is built first
 
   backup:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
     restart: unless-stopped
     environment:
       PGHOST: postgres

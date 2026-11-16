@@ -49,7 +49,7 @@ Two sync systems moving the same files can confuse each other.
 Everything builds in Docker, so Node isn't needed on the host:
 ```sh
 cd obsidian-plugin
-docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -v "$PWD":/work -w /work node:22-alpine \
+docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -v "$PWD":/work -w /work node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a \
   sh -c 'npm ci && npm run build'        # → main.js (committed, so cove can serve it)
 sh test/run-integration.sh               # from the repo root: 9 two-device scenarios against a throwaway cove server
 ```

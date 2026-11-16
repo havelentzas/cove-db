@@ -33,5 +33,5 @@ trap '$DOCKER rm -f $NAME >/dev/null 2>&1; rm -rf "$OUT"' EXIT
 i=0; until [ -s "$OUT/tokens.json" ] && curl -sf http://127.0.0.1:18080/healthz >/dev/null; do
   i=$((i+1)); [ $i -gt 60 ] && { $DOCKER logs $NAME | tail -20; exit 1; }; sleep 1; done
 $DOCKER run --rm --network host -u "$(id -u):$(id -g)" -e HOME=/tmp -e COVE_URL=http://127.0.0.1:18080 \
-  -e COVE_TOKENS=/out/tokens.json -v "$OUT":/out -v "$ROOT/obsidian-plugin":/work -w /work node:22-alpine \
+  -e COVE_TOKENS=/out/tokens.json -v "$OUT":/out -v "$ROOT/obsidian-plugin":/work -w /work node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a \
   npx tsx --test test/sync.test.ts
