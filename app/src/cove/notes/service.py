@@ -596,11 +596,13 @@ def guess_mime(path: str) -> str:
 
 
 # ================================================================ graph & folder tree
-_cache: dict[str, tuple[int, Any]] = {}
+_cache: dict[str, tuple[tuple, Any]] = {}
 
 
-def _head_seq(c) -> int:
-    return c.execute("SELECT coalesce(max(seq), 0) AS s FROM notes.files").fetchone()["s"]
+def _head_seq(c) -> tuple:
+    """Cache key that changes on any write (seq alone repeats if the schema is ever recreated)."""
+    r = c.execute("SELECT coalesce(max(seq), 0) AS s, count(*) AS n, max(updated_at) AS u FROM notes.files").fetchone()
+    return (r["s"], r["n"], r["u"])
 
 
 def _cached(name: str, build):
